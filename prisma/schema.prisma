@@ -1,0 +1,313 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Auth & Users ────────────────────────────────────────────────────────────
+
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  permissions String[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  users       User[]
+
+  @@map("roles")
+}
+
+model User {
+  id         String   @id @default(cuid())
+  name       String
+  email      String   @unique
+  password   String
+  phone      String?
+  avatar     String?
+  isActive   Boolean  @default(true)
+  roleId     String
+  role       Role     @relation(fields: [roleId], references: [id])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  sessions   CashierSession[]
+  orders     Order[]
+  attendance Attendance[]
+
+  @@map("users")
+}
+
+// ─── Products & Categories ───────────────────────────────────────────────────
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  products    Product[]
+
+  @@map("categories")
+}
+
+model Product {
+  id          String    @id @default(cuid())
+  sku         String    @unique
+  name        String
+  description String?
+  price       Float
+  cost        Float     @default(0)
+  stock       Int       @default(0)
+  minStock    Int       @default(5)
+  imageUrl    String?
+  isActive    Boolean   @default(true)
+  categoryId  String?
+  category    Category? @relation(fields: [categoryId], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  orderItems     OrderItem[]
+  stockMovements StockMovement[]
+  purchaseItems  PurchaseOrderItem[]
+  promoProducts  PromoProduct[]
+
+  @@map("products")
+}
+
+model StockMovement {
+  id          String            @id @default(cuid())
+  type        StockMovementType
+  quantity    Int
+  notes       String?
+  productId   String
+  product     Product           @relation(fields: [productId], references: [id])
+  referenceId String?
+  createdAt   DateTime          @default(now())
+
+  @@map("stock_movements")
+}
+
+enum StockMovementType {
+  IN
+  OUT
+  ADJUSTMENT
+  RETURN
+}
+
+// ─── Orders & Payments ───────────────────────────────────────────────────────
+
+model Order {
+  id          String         @id @default(cuid())
+  orderNumber String         @unique
+  status      OrderStatus    @default(PENDING)
+  subtotal    Float
+  discount    Float          @default(0)
+  tax         Float          @default(0)
+  total       Float
+  notes       String?
+  cashierId   String?
+  cashier     User?          @relation(fields: [cashierId], references: [id])
+  sessionId   String?
+  session     CashierSession? @relation(fields: [sessionId], references: [id])
+  promoId     String?
+  promo       Promo?         @relation(fields: [promoId], references: [id])
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  items    OrderItem[]
+  payments Payment[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  quantity  Int
+  unitPrice Float
+  discount  Float   @default(0)
+  subtotal  Float
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id])
+
+  @@map("order_items")
+}
+
+enum OrderStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+model Payment {
+  id        String        @id @default(cuid())
+  method    PaymentMethod
+  amount    Float
+  change    Float         @default(0)
+  reference String?
+  status    PaymentStatus @default(PENDING)
+  orderId   String
+  order     Order         @relation(fields: [orderId], references: [id])
+  createdAt DateTime      @default(now())
+
+  @@map("payments")
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  QRIS
+  TRANSFER
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+// ─── Cashier Sessions ────────────────────────────────────────────────────────
+
+model CashierSession {
+  id        String        @id @default(cuid())
+  cashierId String
+  cashier   User          @relation(fields: [cashierId], references: [id])
+  startCash Float
+  endCash   Float?
+  status    SessionStatus @default(OPEN)
+  openedAt  DateTime      @default(now())
+  closedAt  DateTime?
+  orders    Order[]
+
+  @@map("cashier_sessions")
+}
+
+enum SessionStatus {
+  OPEN
+  CLOSED
+}
+
+// ─── Purchasing ──────────────────────────────────────────────────────────────
+
+model Supplier {
+  id        String          @id @default(cuid())
+  name      String
+  phone     String?
+  email     String?
+  address   String?
+  isActive  Boolean         @default(true)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  purchases PurchaseOrder[]
+
+  @@map("suppliers")
+}
+
+model PurchaseOrder {
+  id         String              @id @default(cuid())
+  poNumber   String              @unique
+  supplierId String
+  supplier   Supplier            @relation(fields: [supplierId], references: [id])
+  status     PurchaseStatus      @default(PENDING)
+  subtotal   Float
+  tax        Float               @default(0)
+  total      Float
+  notes      String?
+  orderedAt  DateTime            @default(now())
+  receivedAt DateTime?
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+  items      PurchaseOrderItem[]
+
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id              String        @id @default(cuid())
+  quantity        Int
+  unitCost        Float
+  subtotal        Float
+  productId       String
+  product         Product       @relation(fields: [productId], references: [id])
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+
+  @@map("purchase_order_items")
+}
+
+enum PurchaseStatus {
+  PENDING
+  ORDERED
+  RECEIVED
+  CANCELLED
+}
+
+// ─── Promos ──────────────────────────────────────────────────────────────────
+
+model Promo {
+  id          String         @id @default(cuid())
+  name        String
+  description String?
+  code        String?        @unique
+  type        PromoType
+  value       Float
+  minOrder    Float?
+  maxDiscount Float?
+  startDate   DateTime
+  endDate     DateTime
+  isActive    Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  orders   Order[]
+  products PromoProduct[]
+
+  @@map("promos")
+}
+
+model PromoProduct {
+  id        String  @id @default(cuid())
+  promoId   String
+  promo     Promo   @relation(fields: [promoId], references: [id])
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+
+  @@unique([promoId, productId])
+  @@map("promo_products")
+}
+
+enum PromoType {
+  PERCENTAGE
+  FIXED
+}
+
+// ─── Attendance ──────────────────────────────────────────────────────────────
+
+model Attendance {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id])
+  date      DateTime         @db.Date
+  checkIn   DateTime?
+  checkOut  DateTime?
+  status    AttendanceStatus @default(PRESENT)
+  notes     String?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@unique([userId, date])
+  @@map("attendance")
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  LEAVE
+  HOLIDAY
+}
