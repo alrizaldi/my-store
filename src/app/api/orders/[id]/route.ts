@@ -56,13 +56,15 @@ export async function PATCH(
       return Response.json({ error: "Order not found" }, { status: 404 });
     }
 
+    let order;
+
     // If status is being changed to CANCELLED, restore stock
     if (status === "CANCELLED" && existingOrder.status !== "CANCELLED") {
-      const order = await prisma.$transaction(async (tx) => {
+      order = await prisma.$transaction(async (tx) => {
         const updatedOrder = await tx.order.update({
           where: { id },
           data: {
-            ...(status !== undefined && { status }),
+            status,
             ...(notes !== undefined && { notes }),
           },
           include: {
@@ -96,27 +98,25 @@ export async function PATCH(
 
         return updatedOrder;
       });
-
-      return Response.json(order);
-    }
-
-    // Normal update (no stock restoration needed)
-    const order = await prisma.order.update({
-      where: { id },
-      data: {
-        ...(status !== undefined && { status }),
-        ...(notes !== undefined && { notes }),
-      },
-      include: {
-        items: {
-          include: { product: true },
+    } else {
+      // Normal update (no stock restoration needed)
+      order = await prisma.order.update({
+        where: { id },
+        data: {
+          ...(status !== undefined && { status }),
+          ...(notes !== undefined && { notes }),
         },
-        payments: true,
-        cashier: { select: { id: true, name: true, email: true } },
-        session: true,
-        promo: true,
-      },
-    });
+        include: {
+          items: {
+            include: { product: true },
+          },
+          payments: true,
+          cashier: { select: { id: true, name: true, email: true } },
+          session: true,
+          promo: true,
+        },
+      });
+    }
 
     return Response.json(order);
   } catch (error: unknown) {
