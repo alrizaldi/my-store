@@ -12,7 +12,7 @@ interface RecentOrder {
   cashier: { name: string } | null;
   total: number;
   status: string;
-  createdAt: string;
+  createdAt: string;  // Changed to string to match the expected format
 }
 
 interface TopProduct {
@@ -92,7 +92,7 @@ export async function getDashboardData(): Promise<DashboardData> {
   ]);
 
   // --- Recent orders: last 5 with cashier name and total ---
-  const recentOrders = await prisma.order.findMany({
+  const recentOrdersFromDB = await prisma.order.findMany({
     orderBy: { createdAt: "desc" },
     take: 5,
     include: {
@@ -101,6 +101,16 @@ export async function getDashboardData(): Promise<DashboardData> {
       },
     },
   });
+
+  // Transform the data to match the expected interface
+  const recentOrders: RecentOrder[] = recentOrdersFromDB.map(order => ({
+    id: order.id,
+    orderNumber: order.orderNumber,
+    cashier: order.cashier ? { name: order.cashier.name } : null,
+    total: order.total,
+    status: order.status,
+    createdAt: order.createdAt.toISOString(),  // Convert Date to string
+  }));
 
   // --- Top products: top 5 by quantity sold this month ---
   const topProductsRaw = await prisma.orderItem.groupBy({
