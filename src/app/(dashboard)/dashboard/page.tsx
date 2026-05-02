@@ -216,34 +216,32 @@ export default async function DashboardPage() {
       {/* Top Products + Sales Trend */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Top Products */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-          <div className="p-5 border-b border-gray-100">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="p-5 border-b border-gray-100 bg-gray-50">
             <h2 className="text-base font-semibold text-gray-900">Produk Terlaris</h2>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100">
-                  <th className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide pb-3 pl-5 pr-4">Nama Produk</th>
-                  <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wide pb-3 pr-4">Terjual</th>
-                  <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wide pb-3 pr-4">Pendapatan</th>
-                  <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wide pb-3 pr-5">Rata-rata</th>
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide py-3 pl-5 pr-4">Nama Produk</th>
+                  <th className="text-right text-xs font-semibold text-gray-500 uppercase tracking-wide py-3 pr-4">Terjual</th>
+                  <th className="text-right text-xs font-semibold text-gray-500 uppercase tracking-wide py tastable-nums py-3 pr-4">Pendapatan</th>
+                  <th className="text-right text-xs font-semibold text-gray-500 uppercase tracking-wide py-3 pr-5">Rata-rata</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-gray-100">
                 {data.topProducts.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="py-8 text-center text-gray-400">Belum ada data produk terlaris</td>
+                    <td colSpan={4} className="py-10 text-center text-gray-500">Belum ada data produk terlaris</td>
                   </tr>
                 ) : (
                   data.topProducts.map((product) => (
-                    <tr key={product.productId} className="hover:bg-gray-50 transition-colors">
-                      <td className="py-3 pl-5 pr-4 text-gray-900">{product.name}</td>
-                      <td className="py-3 pr-4 text-right">{product.totalSold} pcs</td>
-                      <td className="py-3 pr-4 text-right font-semibold">{formatIDR(product.revenue)}</td>
-                      <td className="py-3 pr-5 text-right text-gray-500">
-                        {formatIDR(Math.round(product.revenue / Math.max(1, product.totalSold)))}
-                      </td>
+                    <tr key={product.productId} className="hover:bg-gray-50 transition-colors duration-150">
+                      <td className="py-4 pl-5 pr-4 text-gray-800 font-medium">{product.name}</td>
+                      <td className="py-4 pr-4 text-right text-gray-700 font-medium tabular-nums">{product.totalSold}<span className="text-gray-500 ml-1">pcs</span></td>
+                      <td className="py-4 pr-4 text-right font-semibold text-gray-900 tabular-nums">{formatIDR(product.revenue)}</td>
+                      <td className="py-4 pr-5 text-right text-gray-600 tabular-nums">{formatIDR(Math.round(product.revenue / Math.max(1, product.totalSold)))}</td>
                     </tr>
                   ))
                 )}
