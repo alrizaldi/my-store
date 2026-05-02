@@ -1,6 +1,11 @@
 import { type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import type { Prisma } from "@prisma/client";
+
+// Define type locally since Prisma types may not be directly exported
+type StockMovementWhereInput = {
+  productId?: string;
+  type?: "IN" | "OUT" | "ADJUSTMENT" | "RETURN";
+};
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,7 +16,7 @@ export async function GET(request: NextRequest) {
     const limit = Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10));
     const skip = (page - 1) * limit;
 
-    const where: Prisma.StockMovementWhereInput = {
+    const where: StockMovementWhereInput = {
       ...(productId && { productId }),
       ...(type && { type: type as "IN" | "OUT" | "ADJUSTMENT" | "RETURN" }),
     };
