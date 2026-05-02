@@ -11,7 +11,7 @@ interface SessionOrder {
   orderNumber: string;
   total: number;
   status: OrderStatus;
-  createdAt: string;
+  createdAt: Date;  // Changed from string to Date to match Prisma return type
   payments: Array<{
     method: PaymentMethod;
     amount: number;
@@ -26,15 +26,7 @@ export async function GET(
   try {
     const { id } = await params;
 
-    const session: {
-      id: string;
-      cashier: {
-        id: string;
-        name: string;
-        email: string;
-      };
-      orders: SessionOrder[];
-    } | null = await prisma.cashierSession.findUnique({
+    const session = await prisma.cashierSession.findUnique({
       where: { id },
       include: {
         cashier: {
