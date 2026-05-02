@@ -72,7 +72,7 @@ const STATUS_CLASSES: Record<string, string> = {
 export default async function DashboardPage() {
   const headersList = await headers();
   const host = headersList.get("host");
-  const proto = "http";
+  const protocol = headersList.get("x-forwarded-proto") || "http"; // Use the forwarded protocol
   
   // Get the auth cookie to include in the request
   const cookieStore = await cookies();
@@ -93,7 +93,7 @@ export default async function DashboardPage() {
       };
     }
     
-    const res = await fetch(`${proto}://${host}/api/dashboard`, fetchOptions);
+    const res = await fetch(`${protocol}://${host}/api/dashboard`, fetchOptions);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     data = await res.json();
   } catch (e) {
@@ -199,87 +199,120 @@ export default async function DashboardPage() {
                       title={`${formatIDR(day.revenue)}\n${day.orders} pesanan`}
                     />
                   </div>
-                  <span className="text-xs text-gray-400 leading-none">{formatDate(day.date).split(",")[0]}</span>
-                  <span className="text-xs text-gray-300 leading-none hidden sm:block">
-                    {new Date(day.date).getDate()}
+                  <span className="text-xs text-gray-400 mt-1">
+                    {new Date(day.date).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}
                   </span>
                 </div>
               );
             })}
           </div>
-          <div className="flex justify-between mt-3 border-t border-gray-50 pt-3">
-            {data.salesByDay.map((day) => (
-              <div key={day.date} className="flex-1 text-center">
-                <p className="text-xs text-blue-600 font-medium truncate px-0.5">
-                  {day.revenue > 0 ? formatIDR(day.revenue).replace("Rp\u00a0", "") : "-"}
-                </p>
-              </div>
-            ))}
-          </div>
         </div>
 
-        {/* Top Products */}
-        <div className="xl:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-          <h2 className="text-base font-semibold text-gray-900 mb-4">Produk Terlaris (Bulan Ini)</h2>
-          {data.topProducts.length === 0 ? (
-            <p className="text-gray-400 text-sm text-center py-8">Belum ada data</p>
-          ) : (
-            <div className="space-y-3">
-              {data.topProducts.map((product, idx) => (
-                <div key={product.productId} className="flex items-center gap-3">
-                  <span className="w-6 h-6 rounded-full bg-blue-50 text-blue-600 text-xs font-bold flex items-center justify-center flex-shrink-0">
-                    {idx + 1}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{product.name}</p>
-                    <p className="text-xs text-gray-400">{product.totalSold} terjual</p>
-                  </div>
-                  <span className="text-sm font-semibold text-gray-700 flex-shrink-0">
-                    {formatIDR(product.revenue)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
+        {/* Recent Orders */}
+        <div className="xl:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100">
+          <div className="p-5 border-b border-gray-100">
+            <h2 className="text-base font-semibold text-gray-900">Pesanan Terbaru</h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100">
+                  <th className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide pb-3 pr-4">No. Pesanan</th>
+                  <th className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide pb-3 pr-4">Kasir</th>
+                  <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wide pb-3 pr-4">Total</th>
+                  <th className="text-center text-xs font-semibold text-gray-400 uppercase tracking-wide pb-3 pr-4">Status</th>
+                  <th className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide pb-3">Waktu</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {data.recentOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-gray-400">Belum ada pesanan</td>
+                  </tr>
+                ) : (
+                  data.recentOrders.map((order) => (
+                    <tr key={order.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="py-3 pr-4 font-mono text-blue-600 font-medium">{order.orderNumber}</td>
+                      <td className="py-3 pr-4 text-gray-700">{order.cashier?.name ?? "-"}</td>
+                      <td className="py-3 pr-4 text-right font-semibold text-gray-900">{formatIDR(order.total)}</td>
+                      <td className="py-3 pr-4 text-center">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_CLASSES[order.status] ?? "bg-gray-100 text-gray-600"}`}>
+                          {STATUS_LABELS[order.status] ?? order.status}
+                        </span>
+                      </td>
+                      <td className="py-3 text-gray-400 text-xs">{formatDateTime(order.createdAt)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
-      {/* Recent Orders */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-        <h2 className="text-base font-semibold text-gray-900 mb-4">Pesanan Terbaru</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100">
-                <th className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide pb-3 pr-4">No. Pesanan</th>
-                <th className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide pb-3 pr-4">Kasir</th>
-                <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wide pb-3 pr-4">Total</th>
-                <th className="text-center text-xs font-semibold text-gray-400 uppercase tracking-wide pb-3 pr-4">Status</th>
-                <th className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide pb-3">Waktu</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {data.recentOrders.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="py-8 text-center text-gray-400">Belum ada pesanan</td>
+      {/* Top Products + Sales Trend */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Top Products */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+          <div className="p-5 border-b border-gray-100">
+            <h2 className="text-base font-semibold text-gray-900">Produk Terlaris</h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100">
+                  <th className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide pb-3 pl-5 pr-4">Nama Produk</th>
+                  <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wide pb-3 pr-4">Terjual</th>
+                  <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wide pb-3 pr-4">Pendapatan</th>
+                  <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wide pb-3 pr-5">Rata-rata</th>
                 </tr>
-              ) : (
-                data.recentOrders.map((order) => (
-                  <tr key={order.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="py-3 pr-4 font-mono text-blue-600 font-medium">{order.orderNumber}</td>
-                    <td className="py-3 pr-4 text-gray-700">{order.cashier?.name ?? "-"}</td>
-                    <td className="py-3 pr-4 text-right font-semibold text-gray-900">{formatIDR(order.total)}</td>
-                    <td className="py-3 pr-4 text-center">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_CLASSES[order.status] ?? "bg-gray-100 text-gray-600"}`}>
-                        {STATUS_LABELS[order.status] ?? order.status}
-                      </span>
-                    </td>
-                    <td className="py-3 text-gray-400 text-xs">{formatDateTime(order.createdAt)}</td>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {data.topProducts.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="py-8 text-center text-gray-400">Belum ada data produk terlaris</td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  data.topProducts.map((product) => (
+                    <tr key={product.productId} className="hover:bg-gray-50 transition-colors">
+                      <td className="py-3 pl-5 pr-4 text-gray-900">{product.name}</td>
+                      <td className="py-3 pr-4 text-right">{product.totalSold} pcs</td>
+                      <td className="py-3 pr-4 text-right font-semibold">{formatIDR(product.revenue)}</td>
+                      <td className="py-3 pr-5 text-right text-gray-500">
+                        {formatIDR(Math.round(product.revenue / Math.max(1, product.totalSold)))}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Sales Trend */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+          <h2 className="text-base font-semibold text-gray-900 mb-4">Tren Penjualan</h2>
+          <div className="h-64">
+            <div className="flex items-end gap-1 h-5/6">
+              {data.salesByDay.map((day, idx) => {
+                const heightPct = (day.revenue / maxRevenue) * 100;
+                return (
+                  <div key={idx} className="flex-1 flex flex-col items-center gap-1 group">
+                    <div className="relative w-full flex items-end justify-center" style={{ height: "100%" }}>
+                      <div
+                        className="w-3/4 bg-gradient-to-t from-blue-500 to-blue-400 rounded-t-md transition-all group-hover:from-blue-600 group-hover:to-blue-500"
+                        style={{ height: `${heightPct}%` }}
+                        title={`${formatIDR(day.revenue)} - ${day.orders} orders`}
+                      />
+                    </div>
+                    <span className="text-xs text-gray-400">
+                      {formatDate(day.date)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
     </div>
