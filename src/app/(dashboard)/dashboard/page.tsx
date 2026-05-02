@@ -1,5 +1,6 @@
-import { headers } from "next/headers";
 import { cookies } from "next/headers";
+import { verifyToken } from "@/lib/auth";
+import { getDashboardData, type DashboardData } from "@/lib/dashboardService";
 
 const formatIDR = (amount: number) =>
   new Intl.NumberFormat("id-ID", {
@@ -24,37 +25,6 @@ const formatDateTime = (dateStr: string) => {
   });
 };
 
-interface SalesDay {
-  date: string;
-  orders: number;
-  revenue: number;
-}
-
-interface RecentOrder {
-  id: string;
-  orderNumber: string;
-  cashier: { name: string } | null;
-  total: number;
-  status: string;
-  createdAt: string;
-}
-
-interface TopProduct {
-  productId: string;
-  name: string;
-  totalSold: number;
-  revenue: number;
-}
-
-interface DashboardData {
-  today: { orders: number; revenue: number; customers: number };
-  month: { orders: number; revenue: number };
-  totals: { products: number; employees: number; suppliers: number; lowStockProducts: number };
-  recentOrders: RecentOrder[];
-  topProducts: TopProduct[];
-  salesByDay: SalesDay[];
-}
-
 const STATUS_LABELS: Record<string, string> = {
   PENDING: "Pending",
   COMPLETED: "Selesai",
@@ -70,11 +40,6 @@ const STATUS_CLASSES: Record<string, string> = {
 };
 
 export default async function DashboardPage() {
-  const headersList = await headers();
-  const host = headersList.get("host");
-  const protocol = headersList.get("x-forwarded-proto") || "http"; // Use the forwarded protocol
-  
-  // Get the auth cookie to include in the request
   const cookieStore = await cookies();
   const authToken = cookieStore.get("auth-token");
   
@@ -82,20 +47,18 @@ export default async function DashboardPage() {
   let error: string | null = null;
 
   try {
-    const fetchOptions: RequestInit = {
-      cache: "no-store",
-    };
-    
-    // Include the auth token in the request if available
-    if (authToken) {
-      fetchOptions.headers = {
-        "Cookie": `${authToken.name}=${authToken.value}`
-      };
+    // Verify authentication first
+    if (!authToken?.value) {
+      throw new Error("No authentication token found");
     }
-    
-    const res = await fetch(`${protocol}://${host}/api/dashboard`, fetchOptions);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    data = await res.json();
+
+    const payload = await verifyToken(authToken.value);
+    if (!payload) {
+      throw new Error("Invalid or expired token");
+    }
+
+    // Get dashboard data directly using the service function
+    data = await getDashboardData();
   } catch (e) {
     error = e instanceof Error ? e.message : "Gagal memuat data dashboard";
   }
