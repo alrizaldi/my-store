@@ -1,6 +1,24 @@
 import { type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+// Define types locally since Prisma v7+ doesn't export enums directly
+type OrderStatus = "PENDING" | "COMPLETED" | "CANCELLED" | "REFUNDED";
+type PaymentStatus = "PENDING" | "COMPLETED" | "FAILED" | "REFUNDED";
+type PaymentMethod = "CASH" | "CARD" | "QRIS" | "TRANSFER" | "OTHER";
+
+interface SessionOrder {
+  id: string;
+  orderNumber: string;
+  total: number;
+  status: OrderStatus;
+  createdAt: string;
+  payments: Array<{
+    method: PaymentMethod;
+    amount: number;
+    status: PaymentStatus;
+  }>;
+}
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -8,7 +26,15 @@ export async function GET(
   try {
     const { id } = await params;
 
-    const session = await prisma.cashierSession.findUnique({
+    const session: {
+      id: string;
+      cashier: {
+        id: string;
+        name: string;
+        email: string;
+      };
+      orders: SessionOrder[];
+    } | null = await prisma.cashierSession.findUnique({
       where: { id },
       include: {
         cashier: {
@@ -38,10 +64,10 @@ export async function GET(
     }
 
     // Compute summary
-    const completedOrders = session.orders.filter((o) => o.status === "COMPLETED");
-    const totalRevenue = completedOrders.reduce((sum, o) => sum + o.total, 0);
+    const completedOrders = session.orders.filter((o: SessionOrder) => o.status === "COMPLETED");
+    const totalRevenue = completedOrders.reduce((sum, o: SessionOrder) => sum + o.total, 0);
 
-    const allPayments = session.orders.flatMap((o) => o.payments);
+    const allPayments = session.orders.flatMap((o: SessionOrder) => o.payments);
     const completedPayments = allPayments.filter((p) => p.status === "COMPLETED");
 
     const totalCash = completedPayments
