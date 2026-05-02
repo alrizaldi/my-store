@@ -23,7 +23,11 @@ export async function GET(request: NextRequest) {
 
     if (lowStock) {
       // Find all active products to determine which ones have low stock
-      const allProducts = await prisma.product.findMany({
+      const allProducts: Array<{
+        id: string;
+        stock: number;
+        minStock: number | null;
+      }> = await prisma.product.findMany({
         where: {
           isActive: true,
         },
@@ -36,8 +40,8 @@ export async function GET(request: NextRequest) {
       
       // Filter products where stock <= minStock
       const lowStockProductIds = allProducts
-        .filter(product => product.stock <= (product.minStock || 0))
-        .map(product => product.id);
+        .filter((product: { id: string; stock: number; minStock: number | null }) => product.stock <= (product.minStock || 0))
+        .map((product: { id: string; stock: number; minStock: number | null }) => product.id);
       
       where.id = { in: lowStockProductIds };
     }
