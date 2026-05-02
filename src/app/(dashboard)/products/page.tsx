@@ -113,7 +113,7 @@ function StockBadge({ stock, minStock }: { stock: number; minStock: number }) {
 function PaginationControls({
   pagination,
   onPageChange,
-  onLimitChange,
+  onLimitChange
 }: {
   pagination: PaginationState;
   onPageChange: (page: number) => void;
@@ -131,11 +131,7 @@ function PaginationControls({
   }
 
   // Pages around current page
-  for (
-    let i = Math.max(1, pagination.page - delta);
-    i <= Math.min(pagination.totalPages, pagination.page + delta);
-    i++
-  ) {
+  for (let i = Math.max(1, pagination.page - delta); i <= Math.min(pagination.totalPages, pagination.page + delta); i++) {
     pageNumbers.push(i);
   }
 
@@ -148,78 +144,80 @@ function PaginationControls({
   }
 
   return (
-    <div className="flex flex-wrap items-center justify-between pt-4 px-4 border-t border-gray-200">
-      <div className="text-sm text-gray-700 mb-2 sm:mb-0">
-        Menampilkan{" "}
-        <span className="font-medium">
-          {(pagination.page - 1) * pagination.limit + 1}
-        </span>{" "}
-        hingga{" "}
-        <span className="font-medium">
+    <div className="flex flex-col sm:flex-row items-center justify-between pt-4 px-4 border-t border-gray-200 bg-gray-50/50">
+      <div className="text-sm text-gray-600 mb-3 sm:mb-0">
+        Menampilkan <span className="font-semibold text-gray-800">{(pagination.page - 1) * pagination.limit + 1}</span> hingga{" "}
+        <span className="font-semibold text-gray-800">
           {Math.min(pagination.page * pagination.limit, pagination.total)}
         </span>{" "}
-        dari <span className="font-medium">{pagination.total}</span> hasil
+        dari <span className="font-semibold text-gray-800">{pagination.total}</span> produk
       </div>
-
-      <div className="flex space-x-2">
-        <select
-          value={pagination.limit}
-          onChange={(e) => onLimitChange(Number(e.target.value))}
-          className="border border-gray-300 rounded-md px-2 py-1 text-sm"
-        >
-          {[10, 20, 50, 100].map((size) => (
-            <option key={size} value={size}>
-              {size} per halaman
-            </option>
-          ))}
-        </select>
-
-        <div className="flex space-x-1">
+      
+      <div className="flex flex-wrap items-center space-y-2 sm:space-y-0 sm:space-x-3">
+        <div className="flex items-center">
+          <span className="mr-2 text-sm text-gray-600">Per halaman:</span>
+          <select
+            value={pagination.limit}
+            onChange={(e) => onLimitChange(Number(e.target.value))}
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            {[10, 20, 50, 100].map(size => (
+              <option key={size} value={size}>{size}</option>
+            ))}
+          </select>
+        </div>
+        
+        <div className="flex items-center space-x-1">
           <button
             onClick={() => onPageChange(pagination.page - 1)}
             disabled={pagination.page === 1}
-            className={`px-3 py-1 border rounded-md text-sm ${
+            className={`flex items-center px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               pagination.page === 1
-                ? "border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed"
-                : "border-gray-300 hover:bg-gray-50"
+                ? "text-gray-400 cursor-not-allowed"
+                : "text-gray-600 hover:bg-gray-200 hover:text-gray-800"
             }`}
           >
+            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
             Sebelumnya
           </button>
-
-          {pageNumbers.map((num, idx) =>
-            num === -1 ? (
-              <span
-                key={`ellipsis-${idx}`}
-                className="px-3 py-1 flex items-center"
-              >
-                <span className="text-gray-400">...</span>
-              </span>
-            ) : (
-              <button
-                key={num}
-                onClick={() => onPageChange(num)}
-                className={`px-3 py-1 border rounded-md text-sm ${
-                  num === pagination.page
-                    ? "border-blue-500 bg-blue-500 text-white"
-                    : "border-gray-300 hover:bg-gray-50"
-                }`}
-              >
-                {num}
-              </button>
-            ),
-          )}
-
+          
+          <div className="flex items-center space-x-1 mx-1">
+            {pageNumbers.map((num, idx) => (
+              num === -1 ? (
+                <span key={`ellipsis-${idx}`} className="px-2 py-1.5 text-gray-400">
+                  ...
+                </span>
+              ) : (
+                <button
+                  key={num}
+                  onClick={() => onPageChange(num)}
+                  className={`w-9 h-9 rounded-lg text-sm font-medium transition-colors ${
+                    num === pagination.page
+                      ? "bg-blue-600 text-white shadow-sm hover:bg-blue-700"
+                      : "text-gray-600 hover:bg-gray-200"
+                  }`}
+                >
+                  {num}
+                </button>
+              )
+            ))}
+          </div>
+          
           <button
             onClick={() => onPageChange(pagination.page + 1)}
             disabled={pagination.page === pagination.totalPages}
-            className={`px-3 py-1 border rounded-md text-sm ${
+            className={`flex items-center px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               pagination.page === pagination.totalPages
-                ? "border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed"
-                : "border-gray-300 hover:bg-gray-50"
+                ? "text-gray-400 cursor-not-allowed"
+                : "text-gray-600 hover:bg-gray-200 hover:text-gray-800"
             }`}
           >
             Berikutnya
+            <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
           </button>
         </div>
       </div>
@@ -234,10 +232,10 @@ const emptyForm = {
   name: "",
   description: "",
   categoryId: "",
-  price: "",
-  cost: "",
-  stock: "",
-  minStock: "",
+  price: 0,
+  cost: 0,
+  stock: 0,
+  minStock: 0,
   imageUrl: "",
 };
 
@@ -258,7 +256,7 @@ export default function ProductsPage() {
   // Pagination state
   const [pagination, setPagination] = useState<PaginationState>({
     page: 1,
-    limit: 20,
+    limit: 10,
     total: 0,
     totalPages: 0,
   });
@@ -318,7 +316,13 @@ export default function ProductsPage() {
 
   useEffect(() => {
     fetchProducts(search, selectedCategory, pagination.page, pagination.limit);
-  }, [pagination.page, pagination.limit, search, selectedCategory, fetchProducts]);
+  }, [
+    pagination.page,
+    pagination.limit,
+    search,
+    selectedCategory,
+    fetchProducts,
+  ]);
 
   // ---- Auto-dismiss alert --------------------------------------------------
 
@@ -343,10 +347,10 @@ export default function ProductsPage() {
       name: product.name,
       description: product.description ?? "",
       categoryId: product.categoryId ?? "",
-      price: String(product.price),
-      cost: String(product.cost),
-      stock: String(product.stock),
-      minStock: String(product.minStock),
+      price: product.price,
+      cost: product.cost,
+      stock: product.stock,
+      minStock: product.minStock,
       imageUrl: product.imageUrl ?? "",
     });
     setShowModal("edit");
@@ -373,10 +377,10 @@ export default function ProductsPage() {
         name: form.name.trim(),
         description: form.description.trim() || undefined,
         categoryId: form.categoryId || null,
-        price: Number(form.price),
-        cost: form.cost !== "" ? Number(form.cost) : 0,
-        stock: form.stock !== "" ? Number(form.stock) : 0,
-        minStock: form.minStock !== "" ? Number(form.minStock) : 5,
+        price: form.price,
+        cost: form.cost,
+        stock: form.stock,
+        minStock: form.minStock,
         imageUrl: form.imageUrl.trim() || undefined,
       };
 
@@ -401,14 +405,25 @@ export default function ProductsPage() {
       }
 
       setAlert({
-        message: showModal === "create" ? "Produk berhasil ditambahkan" : "Produk berhasil diperbarui",
+        message:
+          showModal === "create"
+            ? "Produk berhasil ditambahkan"
+            : "Produk berhasil diperbarui",
         type: "success",
       });
       closeModal();
       // Refresh current page after save
-      fetchProducts(search, selectedCategory, pagination.page, pagination.limit);
+      fetchProducts(
+        search,
+        selectedCategory,
+        pagination.page,
+        pagination.limit,
+      );
     } catch (e) {
-      setAlert({ message: e instanceof Error ? e.message : "Gagal menyimpan", type: "error" });
+      setAlert({
+        message: e instanceof Error ? e.message : "Gagal menyimpan",
+        type: "error",
+      });
     } finally {
       setSaving(false);
     }
@@ -430,9 +445,17 @@ export default function ProductsPage() {
       }
       setAlert({ message: "Produk berhasil dinonaktifkan", type: "success" });
       // Refresh current page after delete
-      fetchProducts(search, selectedCategory, pagination.page, pagination.limit);
+      fetchProducts(
+        search,
+        selectedCategory,
+        pagination.page,
+        pagination.limit,
+      );
     } catch (e) {
-      setAlert({ message: e instanceof Error ? e.message : "Gagal menghapus", type: "error" });
+      setAlert({
+        message: e instanceof Error ? e.message : "Gagal menghapus",
+        type: "error",
+      });
     }
   };
 
@@ -603,6 +626,13 @@ export default function ProductsPage() {
             </tbody>
           </table>
         </div>
+        
+        {/* Pagination Controls */}
+        <PaginationControls 
+          pagination={pagination} 
+          onPageChange={handlePageChange}
+          onLimitChange={handleLimitChange}
+        />
       </div>
 
       {/* Modal */}
