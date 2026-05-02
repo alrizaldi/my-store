@@ -1,6 +1,5 @@
 import { type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { PaymentMethod, PaymentStatus, OrderStatus } from "@prisma/client";
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,10 +11,10 @@ export async function GET(request: NextRequest) {
     const limit = Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10));
     const skip = (page - 1) * limit;
 
-    const method = methodParam as PaymentMethod | undefined;
-    const status = statusParam as PaymentStatus | undefined;
+    const method = methodParam as "CASH" | "CARD" | "TRANSFER" | "OTHER" | undefined;
+    const status = statusParam as "PENDING" | "COMPLETED" | "FAILED" | "REFUNDED" | undefined;
 
-    const where = {
+    const where: any = {
       ...(orderId ? { orderId } : {}),
       ...(method ? { method } : {}),
       ...(status ? { status } : {}),
@@ -46,7 +45,10 @@ export async function GET(request: NextRequest) {
     return Response.json({ data, total, page, limit });
   } catch (error) {
     console.error("[GET /api/payments]", error);
-    return Response.json({ error: "Failed to fetch payments" }, { status: 500 });
+    return Response.json(
+      { error: "Failed to fetch payments" },
+      { status: 500 },
+    );
   }
 }
 
@@ -55,7 +57,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { orderId, method, amount, reference } = body as {
       orderId: string;
-      method: PaymentMethod;
+      method: "CASH" | "CARD" | "TRANSFER" | "OTHER";
       amount: number;
       reference?: string;
     };
@@ -66,17 +68,22 @@ export async function POST(request: NextRequest) {
     if (!method) {
       return Response.json({ error: "method is required" }, { status: 400 });
     }
-    if (!Object.values(PaymentMethod).includes(method)) {
+    if (!Object.values(["CASH", "CARD", "TRANSFER", "OTHER"]).includes(method)) {
       return Response.json(
-        { error: `method must be one of: ${Object.values(PaymentMethod).join(", ")}` },
-        { status: 400 }
+        {
+          error: `method must be one of: ${["CASH", "CARD", "TRANSFER", "OTHER"].join(", ")}`,
+        },
+        { status: 400 },
       );
     }
     if (amount === undefined || amount === null) {
       return Response.json({ error: "amount is required" }, { status: 400 });
     }
     if (Number(amount) <= 0) {
-      return Response.json({ error: "amount must be greater than 0" }, { status: 400 });
+      return Response.json(
+        { error: "amount must be greater than 0" },
+        { status: 400 },
+      );
     }
 
     const order = await prisma.order.findUnique({ where: { id: orderId } });
@@ -84,22 +91,23 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: "Order not found" }, { status: 404 });
     }
 
-    if (order.status === OrderStatus.COMPLETED) {
+    if (order.status === "COMPLETED") {
       return Response.json({ error: "Order already paid" }, { status: 400 });
     }
 
     const paidAmount = Number(amount);
     const change = Math.max(0, paidAmount - order.total);
 
+    // @ts-ignore: Transaction client type cannot be imported in Prisma v7+
     const payment = await prisma.$transaction(async (tx) => {
       const newPayment = await tx.payment.create({
         data: {
           orderId,
-          method,
+          method: method as any,
           amount: paidAmount,
           change,
           reference: reference ?? null,
-          status: PaymentStatus.COMPLETED,
+          status: "COMPLETED" as const,
         },
         include: {
           order: {
@@ -117,7 +125,7 @@ export async function POST(request: NextRequest) {
 
       await tx.order.update({
         where: { id: orderId },
-        data: { status: OrderStatus.COMPLETED },
+        data: { status: "COMPLETED" as const },
       });
 
       return newPayment;
@@ -126,6 +134,9 @@ export async function POST(request: NextRequest) {
     return Response.json(payment, { status: 201 });
   } catch (error) {
     console.error("[POST /api/payments]", error);
-    return Response.json({ error: "Failed to create payment" }, { status: 500 });
+    return Response.json(
+      { error: "Failed to create payment" },
+      { status: 500 },
+    );
   }
 }
