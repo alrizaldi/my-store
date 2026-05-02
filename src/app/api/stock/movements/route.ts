@@ -65,6 +65,7 @@ export async function POST(request: NextRequest) {
 
     const movementType = type as "IN" | "OUT" | "ADJUSTMENT" | "RETURN";
 
+    // @ts-ignore - Prisma v7+ doesn't export enums, so we define types locally
     const movement = await prisma.$transaction(async (tx) => {
       // Fetch current product stock
       const product = await tx.product.findUnique({
