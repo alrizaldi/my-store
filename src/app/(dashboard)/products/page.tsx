@@ -232,10 +232,10 @@ const emptyForm = {
   name: "",
   description: "",
   categoryId: "",
-  price: 0,
-  cost: 0,
-  stock: 0,
-  minStock: 0,
+  price: "",
+  cost: "",
+  stock: "",
+  minStock: "",
   imageUrl: "",
 };
 
@@ -347,10 +347,10 @@ export default function ProductsPage() {
       name: product.name,
       description: product.description ?? "",
       categoryId: product.categoryId ?? "",
-      price: product.price,
-      cost: product.cost,
-      stock: product.stock,
-      minStock: product.minStock,
+      price: String(product.price),      // Convert number to string
+      cost: String(product.cost),        // Convert number to string
+      stock: String(product.stock),      // Convert number to string
+      minStock: String(product.minStock), // Convert number to string
       imageUrl: product.imageUrl ?? "",
     });
     setShowModal("edit");
@@ -377,11 +377,11 @@ export default function ProductsPage() {
         name: form.name.trim(),
         description: form.description.trim() || undefined,
         categoryId: form.categoryId || null,
-        price: form.price,
-        cost: form.cost,
-        stock: form.stock,
-        minStock: form.minStock,
-        imageUrl: form.imageUrl.trim() || undefined,
+        price: Number(form.price) || 0,  // Convert string to number
+        cost: form.cost ? Number(form.cost) : 0,  // Convert string to number
+        stock: form.stock ? Number(form.stock) : 0,  // Convert string to number
+        minStock: form.minStock ? Number(form.minStock) : 5,  // Convert string to number
+        imageUrl: form.imageUrl?.trim() || undefined,
       };
 
       let res: Response;
@@ -405,25 +405,14 @@ export default function ProductsPage() {
       }
 
       setAlert({
-        message:
-          showModal === "create"
-            ? "Produk berhasil ditambahkan"
-            : "Produk berhasil diperbarui",
+        message: showModal === "create" ? "Produk berhasil ditambahkan" : "Produk berhasil diperbarui",
         type: "success",
       });
       closeModal();
       // Refresh current page after save
-      fetchProducts(
-        search,
-        selectedCategory,
-        pagination.page,
-        pagination.limit,
-      );
+      fetchProducts(search, selectedCategory, pagination.page, pagination.limit);
     } catch (e) {
-      setAlert({
-        message: e instanceof Error ? e.message : "Gagal menyimpan",
-        type: "error",
-      });
+      setAlert({ message: e instanceof Error ? e.message : "Gagal menyimpan", type: "error" });
     } finally {
       setSaving(false);
     }
