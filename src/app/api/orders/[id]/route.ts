@@ -1,5 +1,6 @@
 import { type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 
 export async function GET(
   _request: NextRequest,
@@ -60,7 +61,7 @@ export async function PATCH(
 
     // If status is being changed to CANCELLED, restore stock
     if (status === "CANCELLED" && existingOrder.status !== "CANCELLED") {
-      order = await prisma.$transaction(async (tx) => {
+      order = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         const updatedOrder = await tx.order.update({
           where: { id },
           data: {
