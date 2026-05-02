@@ -72,7 +72,8 @@ const formatIDR = (n: number) =>
     minimumFractionDigits: 0,
   }).format(n);
 
-const formatDate = (d: string) => new Date(d).toLocaleDateString("id-ID");
+const formatDate = (d: string) =>
+  new Date(d).toLocaleDateString("id-ID", { timeZone: "Asia/Jakarta" });
 
 const formatDateTime = (d: string) =>
   new Date(d).toLocaleString("id-ID", {
