@@ -122,7 +122,7 @@ export async function GET(_request: NextRequest) {
 
     console.log("Top products raw fetched:", topProductsRaw.length);
 
-    const topProductIds = topProductsRaw.map((item) => item.productId);
+    const topProductIds = topProductsRaw.map((item: { productId: string }) => item.productId);
     const topProductDetails = await prisma.product.findMany({
       where: { id: { in: topProductIds } },
       select: { id: true, name: true },
@@ -130,9 +130,9 @@ export async function GET(_request: NextRequest) {
 
     console.log("Top product details fetched:", topProductDetails.length);
 
-    const productMap = new Map(topProductDetails.map((p) => [p.id, p.name]));
+    const productMap = new Map(topProductDetails.map((p: { id: string; name: string }) => [p.id, p.name]));
 
-    const topProducts = topProductsRaw.map((item) => ({
+    const topProducts = topProductsRaw.map((item: { productId: string; _sum: { quantity: number | null; subtotal: number | null } }) => ({
       productId: item.productId,
       name: productMap.get(item.productId) ?? "Unknown",
       totalSold: item._sum.quantity ?? 0,
