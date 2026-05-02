@@ -1,6 +1,5 @@
 import { type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import type { Prisma } from "@prisma/client";
 
 interface OrderItemInput {
   productId: string;
@@ -176,7 +175,8 @@ export async function POST(request: NextRequest) {
     const cashierId = request.headers.get("x-user-id") ?? null;
 
     // Execute transaction: create order + items + decrement stock + stock movements
-    const order = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    // @ts-ignore: Transaction client type cannot be imported in Prisma v7+
+    const order = await prisma.$transaction(async (tx) => {
       const createdOrder = await tx.order.create({
         data: {
           orderNumber,
