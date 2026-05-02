@@ -110,11 +110,36 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 const STATUS_FILTER_BUTTONS = [
-  { value: "", label: "Semua", active: "bg-gray-800 text-white", idle: "bg-white text-gray-600 border border-gray-200 hover:border-gray-400" },
-  { value: "PENDING", label: "Pending", active: "bg-yellow-500 text-white", idle: "bg-white text-yellow-700 border border-yellow-200 hover:border-yellow-400" },
-  { value: "COMPLETED", label: "Selesai", active: "bg-green-600 text-white", idle: "bg-white text-green-700 border border-green-200 hover:border-green-400" },
-  { value: "CANCELLED", label: "Dibatalkan", active: "bg-red-600 text-white", idle: "bg-white text-red-600 border border-red-200 hover:border-red-400" },
-  { value: "REFUNDED", label: "Refund", active: "bg-gray-600 text-white", idle: "bg-white text-gray-500 border border-gray-200 hover:border-gray-400" },
+  {
+    value: "",
+    label: "Semua",
+    active: "bg-gray-800 text-white",
+    idle: "bg-white text-gray-600 border border-gray-200 hover:border-gray-400",
+  },
+  {
+    value: "PENDING",
+    label: "Pending",
+    active: "bg-yellow-500 text-white",
+    idle: "bg-white text-yellow-700 border border-yellow-200 hover:border-yellow-400",
+  },
+  {
+    value: "COMPLETED",
+    label: "Selesai",
+    active: "bg-green-600 text-white",
+    idle: "bg-white text-green-700 border border-green-200 hover:border-green-400",
+  },
+  {
+    value: "CANCELLED",
+    label: "Dibatalkan",
+    active: "bg-red-600 text-white",
+    idle: "bg-white text-red-600 border border-red-200 hover:border-red-400",
+  },
+  {
+    value: "REFUNDED",
+    label: "Refund",
+    active: "bg-gray-600 text-white",
+    idle: "bg-white text-gray-500 border border-gray-200 hover:border-gray-400",
+  },
 ];
 
 // =============================================================================
@@ -155,14 +180,17 @@ export default function OrdersPage() {
         setLoading(false);
       }
     },
-    []
+    [],
   );
 
   // Debounce search, immediate on status/page change
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchOrders(search, statusFilter, page);
-    }, search ? 300 : 0);
+    const timer = setTimeout(
+      () => {
+        fetchOrders(search, statusFilter, page);
+      },
+      search ? 300 : 0,
+    );
     return () => clearTimeout(timer);
   }, [search, statusFilter, page, fetchOrders]);
 
@@ -183,7 +211,7 @@ export default function OrdersPage() {
 
   const handleStatusChange = async (
     orderId: string,
-    newStatus: "CANCELLED" | "REFUNDED"
+    newStatus: "CANCELLED" | "REFUNDED",
   ) => {
     const label = newStatus === "CANCELLED" ? "membatalkan" : "merefund";
     if (!window.confirm(`Konfirmasi ${label} pesanan ini?`)) return;
@@ -211,7 +239,10 @@ export default function OrdersPage() {
       setShowDetail(updated);
       fetchOrders(search, statusFilter, page);
     } catch (e) {
-      setAlert({ message: e instanceof Error ? e.message : "Gagal memperbarui", type: "error" });
+      setAlert({
+        message: e instanceof Error ? e.message : "Gagal memperbarui",
+        type: "error",
+      });
     } finally {
       setActionLoading(false);
     }
@@ -235,7 +266,9 @@ export default function OrdersPage() {
       )}
 
       {/* Page header */}
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Manajemen Pesanan</h1>
+      <h1 className="text-2xl font-bold text-gray-900 mb-6">
+        Manajemen Pesanan
+      </h1>
 
       {/* Search + Status filters */}
       <div className="flex flex-wrap gap-3 mb-6">
@@ -267,15 +300,33 @@ export default function OrdersPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-100 border-b border-gray-200">
-                <th className="text-left px-4 py-3 font-semibold text-gray-600">No. Pesanan</th>
-                <th className="text-left px-4 py-3 font-semibold text-gray-600">Tanggal</th>
-                <th className="text-left px-4 py-3 font-semibold text-gray-600">Kasir</th>
-                <th className="text-center px-4 py-3 font-semibold text-gray-600">Item</th>
-                <th className="text-right px-4 py-3 font-semibold text-gray-600">Subtotal</th>
-                <th className="text-right px-4 py-3 font-semibold text-gray-600">Diskon</th>
-                <th className="text-right px-4 py-3 font-semibold text-gray-600">Total</th>
-                <th className="text-center px-4 py-3 font-semibold text-gray-600">Status</th>
-                <th className="text-center px-4 py-3 font-semibold text-gray-600">Aksi</th>
+                <th className="text-left px-4 py-3 font-semibold text-gray-600">
+                  No. Pesanan
+                </th>
+                <th className="text-left px-4 py-3 font-semibold text-gray-600">
+                  Tanggal
+                </th>
+                <th className="text-left px-4 py-3 font-semibold text-gray-600">
+                  Kasir
+                </th>
+                <th className="text-center px-4 py-3 font-semibold text-gray-600">
+                  Item
+                </th>
+                <th className="text-right px-4 py-3 font-semibold text-gray-600">
+                  Subtotal
+                </th>
+                <th className="text-right px-4 py-3 font-semibold text-gray-600">
+                  Diskon
+                </th>
+                <th className="text-right px-4 py-3 font-semibold text-gray-600">
+                  Total
+                </th>
+                <th className="text-center px-4 py-3 font-semibold text-gray-600">
+                  Status
+                </th>
+                <th className="text-center px-4 py-3 font-semibold text-gray-600">
+                  Aksi
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -304,14 +355,20 @@ export default function OrdersPage() {
                       {formatDate(order.createdAt)}
                     </td>
                     <td className="px-4 py-3 text-gray-700">
-                      {order.cashier?.name ?? <span className="text-gray-300 italic">—</span>}
+                      {order.cashier?.name ?? (
+                        <span className="text-gray-300 italic">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-center text-gray-600">
                       {order.items.reduce((s, i) => s + i.quantity, 0)}
                     </td>
-                    <td className="px-4 py-3 text-right text-gray-600">{formatIDR(order.subtotal)}</td>
+                    <td className="px-4 py-3 text-right text-gray-600">
+                      {formatIDR(order.subtotal)}
+                    </td>
                     <td className="px-4 py-3 text-right text-green-600">
-                      {order.discount > 0 ? `- ${formatIDR(order.discount)}` : "—"}
+                      {order.discount > 0
+                        ? `- ${formatIDR(order.discount)}`
+                        : "—"}
                     </td>
                     <td className="px-4 py-3 text-right font-semibold text-gray-900">
                       {formatIDR(order.total)}
@@ -368,15 +425,29 @@ export default function OrdersPage() {
             {/* Modal header */}
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white">
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">Detail Pesanan</h2>
-                <p className="text-sm font-mono text-blue-600">{showDetail.orderNumber}</p>
+                <h2 className="text-lg font-semibold text-gray-900">
+                  Detail Pesanan
+                </h2>
+                <p className="text-sm font-mono text-blue-600">
+                  {showDetail.orderNumber}
+                </p>
               </div>
               <button
                 onClick={() => setShowDetail(null)}
                 className="text-gray-400 hover:text-gray-600 transition-colors"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
                 </svg>
               </button>
             </div>
@@ -420,28 +491,49 @@ export default function OrdersPage() {
 
               {/* Items table */}
               <div>
-                <h3 className="text-sm font-semibold text-gray-700 mb-2">Item Pesanan</h3>
+                <h3 className="text-sm font-semibold text-gray-700 mb-2">
+                  Item Pesanan
+                </h3>
                 <div className="rounded-lg border border-gray-100 overflow-hidden">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="bg-gray-50 border-b border-gray-100">
-                        <th className="text-left px-3 py-2 text-xs font-semibold text-gray-500">Produk</th>
-                        <th className="text-center px-3 py-2 text-xs font-semibold text-gray-500">Qty</th>
-                        <th className="text-right px-3 py-2 text-xs font-semibold text-gray-500">Harga Satuan</th>
-                        <th className="text-right px-3 py-2 text-xs font-semibold text-gray-500">Diskon</th>
-                        <th className="text-right px-3 py-2 text-xs font-semibold text-gray-500">Subtotal</th>
+                        <th className="text-left px-3 py-2 text-xs font-semibold text-gray-500">
+                          Produk
+                        </th>
+                        <th className="text-center px-3 py-2 text-xs font-semibold text-gray-500">
+                          Qty
+                        </th>
+                        <th className="text-right px-3 py-2 text-xs font-semibold text-gray-500">
+                          Harga Satuan
+                        </th>
+                        <th className="text-right px-3 py-2 text-xs font-semibold text-gray-500">
+                          Diskon
+                        </th>
+                        <th className="text-right px-3 py-2 text-xs font-semibold text-gray-500">
+                          Subtotal
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
                       {showDetail.items.map((item) => (
-                        <tr key={item.id} className="border-b border-gray-50 last:border-0">
-                          <td className="px-3 py-2 text-gray-900">{item.product.name}</td>
-                          <td className="px-3 py-2 text-center text-gray-600">{item.quantity}</td>
+                        <tr
+                          key={item.id}
+                          className="border-b border-gray-50 last:border-0"
+                        >
+                          <td className="px-3 py-2 text-gray-900">
+                            {item.product.name}
+                          </td>
+                          <td className="px-3 py-2 text-center text-gray-600">
+                            {item.quantity}
+                          </td>
                           <td className="px-3 py-2 text-right text-gray-600">
                             {formatIDR(item.unitPrice)}
                           </td>
                           <td className="px-3 py-2 text-right text-green-600">
-                            {item.discount > 0 ? `- ${formatIDR(item.discount)}` : "—"}
+                            {item.discount > 0
+                              ? `- ${formatIDR(item.discount)}`
+                              : "—"}
                           </td>
                           <td className="px-3 py-2 text-right font-medium text-gray-900">
                             {formatIDR(item.subtotal)}
@@ -456,7 +548,9 @@ export default function OrdersPage() {
               {/* Payment info */}
               {showDetail.payments.length > 0 && (
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-700 mb-2">Informasi Pembayaran</h3>
+                  <h3 className="text-sm font-semibold text-gray-700 mb-2">
+                    Informasi Pembayaran
+                  </h3>
                   <div className="space-y-2">
                     {showDetail.payments.map((payment) => (
                       <div
@@ -464,7 +558,9 @@ export default function OrdersPage() {
                         className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-3 text-sm"
                       >
                         <div className="flex items-center gap-3">
-                          <span className="font-medium text-gray-900">{payment.method}</span>
+                          <span className="font-medium text-gray-900">
+                            {payment.method}
+                          </span>
                           <span
                             className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                               payment.status === "PAID"
@@ -519,7 +615,9 @@ export default function OrdersPage() {
               <div className="flex justify-end gap-3">
                 {showDetail.status === "PENDING" && (
                   <button
-                    onClick={() => handleStatusChange(showDetail.id, "CANCELLED")}
+                    onClick={() =>
+                      handleStatusChange(showDetail.id, "CANCELLED")
+                    }
                     disabled={actionLoading}
                     className="px-4 py-2 text-sm font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-50 transition-colors flex items-center gap-2"
                   >
@@ -531,7 +629,9 @@ export default function OrdersPage() {
                 )}
                 {showDetail.status === "COMPLETED" && (
                   <button
-                    onClick={() => handleStatusChange(showDetail.id, "REFUNDED")}
+                    onClick={() =>
+                      handleStatusChange(showDetail.id, "REFUNDED")
+                    }
                     disabled={actionLoading}
                     className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors flex items-center gap-2"
                   >
