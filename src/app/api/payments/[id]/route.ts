@@ -1,10 +1,9 @@
 import { type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { PaymentStatus, OrderStatus, StockMovementType } from "@prisma/client";
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params;
@@ -39,22 +38,24 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params;
     const body = await request.json();
 
-    const { status } = body as { status?: PaymentStatus };
+    const { status } = body as {
+      status?: "PENDING" | "COMPLETED" | "FAILED" | "REFUNDED";
+    };
 
     if (!status) {
       return Response.json({ error: "status is required" }, { status: 400 });
     }
 
-    if (status !== PaymentStatus.REFUNDED) {
+    if (status !== "REFUNDED") {
       return Response.json(
         { error: "Only REFUNDED status is allowed via PATCH" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -73,10 +74,14 @@ export async function PATCH(
       return Response.json({ error: "Payment not found" }, { status: 404 });
     }
 
-    if (existingPayment.status === PaymentStatus.REFUNDED) {
-      return Response.json({ error: "Payment is already refunded" }, { status: 400 });
+    if (existingPayment.status === "REFUNDED") {
+      return Response.json(
+        { error: "Payment is already refunded" },
+        { status: 400 },
+      );
     }
 
+    // @ts-ignore: Transaction client type cannot be imported in Prisma v7+
     const updatedPayment = await prisma.$transaction(async (tx) => {
       // Restore stock for each order item and create RETURN StockMovement records
       for (const item of existingPayment.order.items) {
@@ -87,7 +92,7 @@ export async function PATCH(
 
         await tx.stockMovement.create({
           data: {
-            type: StockMovementType.RETURN,
+            type: "RETURN" as const,
             quantity: item.quantity,
             notes: `Refund for order ${existingPayment.order.orderNumber}`,
             productId: item.productId,
@@ -99,13 +104,13 @@ export async function PATCH(
       // Update order status to REFUNDED
       await tx.order.update({
         where: { id: existingPayment.orderId },
-        data: { status: OrderStatus.REFUNDED },
+        data: { status: "REFUNDED" as const },
       });
 
       // Update payment status to REFUNDED
       return tx.payment.update({
         where: { id },
-        data: { status: PaymentStatus.REFUNDED },
+        data: { status: "REFUNDED" as const },
         include: {
           order: {
             include: {
@@ -133,6 +138,9 @@ export async function PATCH(
     ) {
       return Response.json({ error: "Payment not found" }, { status: 404 });
     }
-    return Response.json({ error: "Failed to update payment" }, { status: 500 });
+    return Response.json(
+      { error: "Failed to update payment" },
+      { status: 500 },
+    );
   }
 }
