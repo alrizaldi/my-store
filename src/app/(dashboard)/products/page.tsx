@@ -66,8 +66,6 @@ interface Alert {
   type: "success" | "error";
 }
 
-type ModalMode = false | "create" | "edit";
-
 // ---- Helpers ----------------------------------------------------------------
 
 const formatIDR = (n: number) =>
@@ -306,7 +304,7 @@ export default function ProductsPage() {
       .catch(() => setCategories([]));
   }, []);
 
-  // ---- Debounced search / filter -------------------------------------------
+  // ---- Debounced search / filter with pagination -------------------------------------------
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -320,7 +318,7 @@ export default function ProductsPage() {
 
   useEffect(() => {
     fetchProducts(search, selectedCategory, pagination.page, pagination.limit);
-  }, [pagination.page, pagination.limit, fetchProducts]);
+  }, [pagination.page, pagination.limit, search, selectedCategory, fetchProducts]);
 
   // ---- Auto-dismiss alert --------------------------------------------------
 
@@ -403,19 +401,14 @@ export default function ProductsPage() {
       }
 
       setAlert({
-        message:
-          showModal === "create"
-            ? "Produk berhasil ditambahkan"
-            : "Produk berhasil diperbarui",
+        message: showModal === "create" ? "Produk berhasil ditambahkan" : "Produk berhasil diperbarui",
         type: "success",
       });
       closeModal();
-      fetchProducts(search, selectedCategory);
+      // Refresh current page after save
+      fetchProducts(search, selectedCategory, pagination.page, pagination.limit);
     } catch (e) {
-      setAlert({
-        message: e instanceof Error ? e.message : "Gagal menyimpan",
-        type: "error",
-      });
+      setAlert({ message: e instanceof Error ? e.message : "Gagal menyimpan", type: "error" });
     } finally {
       setSaving(false);
     }
@@ -437,17 +430,9 @@ export default function ProductsPage() {
       }
       setAlert({ message: "Produk berhasil dinonaktifkan", type: "success" });
       // Refresh current page after delete
-      fetchProducts(
-        search,
-        selectedCategory,
-        pagination.page,
-        pagination.limit,
-      );
+      fetchProducts(search, selectedCategory, pagination.page, pagination.limit);
     } catch (e) {
-      setAlert({
-        message: e instanceof Error ? e.message : "Gagal menghapus",
-        type: "error",
-      });
+      setAlert({ message: e instanceof Error ? e.message : "Gagal menghapus", type: "error" });
     }
   };
 
