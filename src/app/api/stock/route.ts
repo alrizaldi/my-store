@@ -1,6 +1,5 @@
 import { type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import type { Prisma } from "@prisma/client";
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,7 +11,7 @@ export async function GET(request: NextRequest) {
     const limit = Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10));
     const skip = (page - 1) * limit;
 
-    const where: Prisma.ProductWhereInput = {
+    const where: any = {
       ...(search && {
         OR: [
           { name: { contains: search, mode: "insensitive" } },
@@ -23,13 +22,24 @@ export async function GET(request: NextRequest) {
     };
 
     if (lowStock) {
-      // stock <= minStock — Prisma does not support column-to-column comparisons
-      // directly in the typed client. We use a raw filter to get the ids first.
-      const rows = await prisma.$queryRaw<{ id: string }[]>(
-        Prisma.sql`SELECT id FROM products WHERE stock <= "minStock"`,
-      );
-      const ids = rows.map((r) => r.id);
-      where.id = { in: ids };
+      // Find all active products to determine which ones have low stock
+      const allProducts = await prisma.product.findMany({
+        where: {
+          isActive: true,
+        },
+        select: {
+          id: true,
+          stock: true,
+          minStock: true,
+        },
+      });
+      
+      // Filter products where stock <= minStock
+      const lowStockProductIds = allProducts
+        .filter(product => product.stock <= (product.minStock || 0))
+        .map(product => product.id);
+      
+      where.id = { in: lowStockProductIds };
     }
 
     const [total, data] = await Promise.all([

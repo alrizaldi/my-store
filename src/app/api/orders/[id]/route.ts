@@ -1,6 +1,5 @@
 import { type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import type { Prisma } from "@prisma/client";
 
 export async function GET(
   _request: NextRequest,
@@ -61,46 +60,44 @@ export async function PATCH(
 
     // If status is being changed to CANCELLED, restore stock
     if (status === "CANCELLED" && existingOrder.status !== "CANCELLED") {
-      order = await prisma.$transaction(
-        async (tx: Prisma.TransactionClient) => {
-          const updatedOrder = await tx.order.update({
-            where: { id },
-            data: {
-              status,
-              ...(notes !== undefined && { notes }),
+      order = await prisma.$transaction(async (tx) => {
+        const updatedOrder = await tx.order.update({
+          where: { id },
+          data: {
+            status,
+            ...(notes !== undefined && { notes }),
+          },
+          include: {
+            items: {
+              include: { product: true },
             },
-            include: {
-              items: {
-                include: { product: true },
-              },
-              payments: true,
-              cashier: { select: { id: true, name: true, email: true } },
-              session: true,
-              promo: true,
-            },
+            payments: true,
+            cashier: { select: { id: true, name: true, email: true } },
+            session: true,
+            promo: true,
+          },
+        });
+
+        // Restore stock for each order item
+        for (const item of existingOrder.items) {
+          await tx.product.update({
+            where: { id: item.productId },
+            data: { stock: { increment: item.quantity } },
           });
 
-          // Restore stock for each order item
-          for (const item of existingOrder.items) {
-            await tx.product.update({
-              where: { id: item.productId },
-              data: { stock: { increment: item.quantity } },
-            });
+          await tx.stockMovement.create({
+            data: {
+              type: "RETURN",
+              quantity: item.quantity,
+              notes: `Cancelled - Order ${existingOrder.orderNumber}`,
+              productId: item.productId,
+              referenceId: id,
+            },
+          });
+        }
 
-            await tx.stockMovement.create({
-              data: {
-                type: "RETURN",
-                quantity: item.quantity,
-                notes: `Cancelled - Order ${existingOrder.orderNumber}`,
-                productId: item.productId,
-                referenceId: id,
-              },
-            });
-          }
-
-          return updatedOrder;
-        },
-      );
+        return updatedOrder;
+      });
     } else {
       // Normal update (no stock restoration needed)
       order = await prisma.order.update({
