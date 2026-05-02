@@ -11,8 +11,19 @@ export async function GET(request: NextRequest) {
     const limit = Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10));
     const skip = (page - 1) * limit;
 
-    const method = methodParam as "CASH" | "CARD" | "TRANSFER" | "OTHER" | undefined;
-    const status = statusParam as "PENDING" | "COMPLETED" | "FAILED" | "REFUNDED" | undefined;
+    const method = methodParam as
+      | "CASH"
+      | "CARD"
+      | "QRIS"
+      | "TRANSFER"
+      | "OTHER"
+      | undefined;
+    const status = statusParam as
+      | "PENDING"
+      | "COMPLETED"
+      | "FAILED"
+      | "REFUNDED"
+      | undefined;
 
     const where: any = {
       ...(orderId ? { orderId } : {}),
@@ -57,7 +68,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { orderId, method, amount, reference } = body as {
       orderId: string;
-      method: "CASH" | "CARD" | "TRANSFER" | "OTHER";
+      method: "CASH" | "CARD" | "QRIS" | "TRANSFER" | "OTHER";
       amount: number;
       reference?: string;
     };
@@ -68,10 +79,14 @@ export async function POST(request: NextRequest) {
     if (!method) {
       return Response.json({ error: "method is required" }, { status: 400 });
     }
-    if (!Object.values(["CASH", "CARD", "TRANSFER", "OTHER"]).includes(method)) {
+    if (
+      !Object.values(["CASH", "CARD", "QRIS", "TRANSFER", "OTHER"]).includes(
+        method,
+      )
+    ) {
       return Response.json(
         {
-          error: `method must be one of: ${["CASH", "CARD", "TRANSFER", "OTHER"].join(", ")}`,
+          error: `method must be one of: ${["CASH", "CARD", "QRIS", "TRANSFER", "OTHER"].join(", ")}`,
         },
         { status: 400 },
       );
