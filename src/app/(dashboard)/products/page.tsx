@@ -31,6 +31,43 @@ interface Alert {
 
 type ModalMode = false | "create" | "edit";
 
+// Pagination state
+interface PaginationState {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+// ---- Types ------------------------------------------------------------------
+
+interface Category {
+  id: string;
+  name: string;
+}
+
+interface Product {
+  id: string;
+  sku: string;
+  name: string;
+  description: string | null;
+  price: number;
+  cost: number;
+  stock: number;
+  minStock: number;
+  imageUrl: string | null;
+  isActive: boolean;
+  categoryId: string | null;
+  category: Category | null;
+}
+
+interface Alert {
+  message: string;
+  type: "success" | "error";
+}
+
+type ModalMode = false | "create" | "edit";
+
 // ---- Helpers ----------------------------------------------------------------
 
 const formatIDR = (n: number) =>
@@ -44,9 +81,7 @@ function StatusBadge({ isActive }: { isActive: boolean }) {
   return (
     <span
       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-        isActive
-          ? "bg-green-100 text-green-800"
-          : "bg-red-100 text-red-700"
+        isActive ? "bg-green-100 text-green-800" : "bg-red-100 text-red-700"
       }`}
     >
       {isActive ? "Aktif" : "Nonaktif"}
@@ -73,6 +108,124 @@ function StockBadge({ stock, minStock }: { stock: number; minStock: number }) {
     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
       {stock}
     </span>
+  );
+}
+
+// Pagination controls component
+function PaginationControls({
+  pagination,
+  onPageChange,
+  onLimitChange,
+}: {
+  pagination: PaginationState;
+  onPageChange: (page: number) => void;
+  onLimitChange: (limit: number) => void;
+}) {
+  const pageNumbers = [];
+  const delta = 2; // How many pages to show around current page
+
+  // First page
+  if (pagination.page > delta + 1) {
+    pageNumbers.push(1);
+    if (pagination.page > delta + 2) {
+      pageNumbers.push(-1); // Ellipsis indicator
+    }
+  }
+
+  // Pages around current page
+  for (
+    let i = Math.max(1, pagination.page - delta);
+    i <= Math.min(pagination.totalPages, pagination.page + delta);
+    i++
+  ) {
+    pageNumbers.push(i);
+  }
+
+  // Last page
+  if (pagination.page < pagination.totalPages - delta) {
+    if (pagination.page < pagination.totalPages - delta - 1) {
+      pageNumbers.push(-1); // Ellipsis indicator
+    }
+    pageNumbers.push(pagination.totalPages);
+  }
+
+  return (
+    <div className="flex flex-wrap items-center justify-between pt-4 px-4 border-t border-gray-200">
+      <div className="text-sm text-gray-700 mb-2 sm:mb-0">
+        Menampilkan{" "}
+        <span className="font-medium">
+          {(pagination.page - 1) * pagination.limit + 1}
+        </span>{" "}
+        hingga{" "}
+        <span className="font-medium">
+          {Math.min(pagination.page * pagination.limit, pagination.total)}
+        </span>{" "}
+        dari <span className="font-medium">{pagination.total}</span> hasil
+      </div>
+
+      <div className="flex space-x-2">
+        <select
+          value={pagination.limit}
+          onChange={(e) => onLimitChange(Number(e.target.value))}
+          className="border border-gray-300 rounded-md px-2 py-1 text-sm"
+        >
+          {[10, 20, 50, 100].map((size) => (
+            <option key={size} value={size}>
+              {size} per halaman
+            </option>
+          ))}
+        </select>
+
+        <div className="flex space-x-1">
+          <button
+            onClick={() => onPageChange(pagination.page - 1)}
+            disabled={pagination.page === 1}
+            className={`px-3 py-1 border rounded-md text-sm ${
+              pagination.page === 1
+                ? "border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed"
+                : "border-gray-300 hover:bg-gray-50"
+            }`}
+          >
+            Sebelumnya
+          </button>
+
+          {pageNumbers.map((num, idx) =>
+            num === -1 ? (
+              <span
+                key={`ellipsis-${idx}`}
+                className="px-3 py-1 flex items-center"
+              >
+                <span className="text-gray-400">...</span>
+              </span>
+            ) : (
+              <button
+                key={num}
+                onClick={() => onPageChange(num)}
+                className={`px-3 py-1 border rounded-md text-sm ${
+                  num === pagination.page
+                    ? "border-blue-500 bg-blue-500 text-white"
+                    : "border-gray-300 hover:bg-gray-50"
+                }`}
+              >
+                {num}
+              </button>
+            ),
+          )}
+
+          <button
+            onClick={() => onPageChange(pagination.page + 1)}
+            disabled={pagination.page === pagination.totalPages}
+            className={`px-3 py-1 border rounded-md text-sm ${
+              pagination.page === pagination.totalPages
+                ? "border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed"
+                : "border-gray-300 hover:bg-gray-50"
+            }`}
+          >
+            Berikutnya
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -104,23 +257,45 @@ export default function ProductsPage() {
   const [saving, setSaving] = useState(false);
   const [alert, setAlert] = useState<Alert | null>(null);
 
+  // Pagination state
+  const [pagination, setPagination] = useState<PaginationState>({
+    page: 1,
+    limit: 20,
+    total: 0,
+    totalPages: 0,
+  });
+
   // ---- Fetch helpers --------------------------------------------------------
 
-  const fetchProducts = useCallback(async (q: string, cat: string) => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({ showAll: "true", limit: "100" });
-      if (q) params.set("search", q);
-      if (cat) params.set("categoryId", cat);
-      const res = await fetch(`/api/products?${params}`);
-      const json = await res.json();
-      setProducts(Array.isArray(json.data) ? json.data : []);
-    } catch {
-      setAlert({ message: "Gagal memuat produk", type: "error" });
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const fetchProducts = useCallback(
+    async (q: string, cat: string, page: number, limit: number) => {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({
+          showAll: "true",
+          page: String(page),
+          limit: String(limit),
+        });
+        if (q) params.set("search", q);
+        if (cat) params.set("categoryId", cat);
+        const res = await fetch(`/api/products?${params}`);
+        const json = await res.json();
+
+        setProducts(Array.isArray(json.data) ? json.data : []);
+        setPagination({
+          page: json.page,
+          limit: json.limit,
+          total: json.total,
+          totalPages: Math.ceil(json.total / json.limit),
+        });
+      } catch {
+        setAlert({ message: "Gagal memuat produk", type: "error" });
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
 
   // ---- Initial fetch --------------------------------------------------------
 
@@ -135,10 +310,17 @@ export default function ProductsPage() {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      fetchProducts(search, selectedCategory);
+      // Reset to first page when search or category changes
+      fetchProducts(search, selectedCategory, 1, pagination.limit);
     }, 300);
     return () => clearTimeout(timer);
   }, [search, selectedCategory, fetchProducts]);
+
+  // ---- Fetch products when page or limit changes ----------------------------
+
+  useEffect(() => {
+    fetchProducts(search, selectedCategory, pagination.page, pagination.limit);
+  }, [pagination.page, pagination.limit, fetchProducts]);
 
   // ---- Auto-dismiss alert --------------------------------------------------
 
@@ -221,13 +403,19 @@ export default function ProductsPage() {
       }
 
       setAlert({
-        message: showModal === "create" ? "Produk berhasil ditambahkan" : "Produk berhasil diperbarui",
+        message:
+          showModal === "create"
+            ? "Produk berhasil ditambahkan"
+            : "Produk berhasil diperbarui",
         type: "success",
       });
       closeModal();
       fetchProducts(search, selectedCategory);
     } catch (e) {
-      setAlert({ message: e instanceof Error ? e.message : "Gagal menyimpan", type: "error" });
+      setAlert({
+        message: e instanceof Error ? e.message : "Gagal menyimpan",
+        type: "error",
+      });
     } finally {
       setSaving(false);
     }
@@ -248,10 +436,34 @@ export default function ProductsPage() {
         throw new Error(err.error ?? "Gagal menghapus");
       }
       setAlert({ message: "Produk berhasil dinonaktifkan", type: "success" });
-      fetchProducts(search, selectedCategory);
+      // Refresh current page after delete
+      fetchProducts(
+        search,
+        selectedCategory,
+        pagination.page,
+        pagination.limit,
+      );
     } catch (e) {
-      setAlert({ message: e instanceof Error ? e.message : "Gagal menghapus", type: "error" });
+      setAlert({
+        message: e instanceof Error ? e.message : "Gagal menghapus",
+        type: "error",
+      });
     }
+  };
+
+  // Pagination handlers
+  const handlePageChange = (page: number) => {
+    if (page >= 1 && page <= pagination.totalPages) {
+      setPagination((prev) => ({ ...prev, page }));
+    }
+  };
+
+  const handleLimitChange = (limit: number) => {
+    setPagination((prev) => ({
+      ...prev,
+      limit,
+      page: 1, // Reset to first page when limit changes
+    }));
   };
 
   // ---- Render ---------------------------------------------------------------
@@ -272,7 +484,9 @@ export default function ProductsPage() {
       )}
 
       {/* Page header */}
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Manajemen Produk</h1>
+      <h1 className="text-2xl font-bold text-gray-900 mb-6">
+        Manajemen Produk
+      </h1>
 
       {/* Filters + Add button */}
       <div className="flex flex-wrap gap-3 mb-6">
@@ -309,14 +523,30 @@ export default function ProductsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-100 border-b border-gray-200">
-                <th className="text-left px-4 py-3 font-semibold text-gray-600">SKU</th>
-                <th className="text-left px-4 py-3 font-semibold text-gray-600">Nama</th>
-                <th className="text-left px-4 py-3 font-semibold text-gray-600">Kategori</th>
-                <th className="text-right px-4 py-3 font-semibold text-gray-600">Harga</th>
-                <th className="text-right px-4 py-3 font-semibold text-gray-600">HPP</th>
-                <th className="text-center px-4 py-3 font-semibold text-gray-600">Stok</th>
-                <th className="text-center px-4 py-3 font-semibold text-gray-600">Status</th>
-                <th className="text-center px-4 py-3 font-semibold text-gray-600">Aksi</th>
+                <th className="text-left px-4 py-3 font-semibold text-gray-600">
+                  SKU
+                </th>
+                <th className="text-left px-4 py-3 font-semibold text-gray-600">
+                  Nama
+                </th>
+                <th className="text-left px-4 py-3 font-semibold text-gray-600">
+                  Kategori
+                </th>
+                <th className="text-right px-4 py-3 font-semibold text-gray-600">
+                  Harga
+                </th>
+                <th className="text-right px-4 py-3 font-semibold text-gray-600">
+                  HPP
+                </th>
+                <th className="text-center px-4 py-3 font-semibold text-gray-600">
+                  Stok
+                </th>
+                <th className="text-center px-4 py-3 font-semibold text-gray-600">
+                  Status
+                </th>
+                <th className="text-center px-4 py-3 font-semibold text-gray-600">
+                  Aksi
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -338,17 +568,28 @@ export default function ProductsPage() {
                     key={product.id}
                     className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
                   >
-                    <td className="px-4 py-3 font-mono text-gray-600 text-xs">{product.sku}</td>
-                    <td className="px-4 py-3 font-medium text-gray-900">{product.name}</td>
+                    <td className="px-4 py-3 font-mono text-gray-600 text-xs">
+                      {product.sku}
+                    </td>
+                    <td className="px-4 py-3 font-medium text-gray-900">
+                      {product.name}
+                    </td>
                     <td className="px-4 py-3 text-gray-500">
                       {product.category?.name ?? (
                         <span className="text-gray-300 italic">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right text-gray-900">{formatIDR(product.price)}</td>
-                    <td className="px-4 py-3 text-right text-gray-500">{formatIDR(product.cost)}</td>
+                    <td className="px-4 py-3 text-right text-gray-900">
+                      {formatIDR(product.price)}
+                    </td>
+                    <td className="px-4 py-3 text-right text-gray-500">
+                      {formatIDR(product.cost)}
+                    </td>
                     <td className="px-4 py-3 text-center">
-                      <StockBadge stock={product.stock} minStock={product.minStock} />
+                      <StockBadge
+                        stock={product.stock}
+                        minStock={product.minStock}
+                      />
                     </td>
                     <td className="px-4 py-3 text-center">
                       <StatusBadge isActive={product.isActive} />
@@ -391,8 +632,18 @@ export default function ProductsPage() {
                 onClick={closeModal}
                 className="text-gray-400 hover:text-gray-600 transition-colors"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
                 </svg>
               </button>
             </div>
@@ -406,7 +657,9 @@ export default function ProductsPage() {
                 <input
                   type="text"
                   value={form.sku}
-                  onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, sku: e.target.value }))
+                  }
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Contoh: PRD-001"
                 />
@@ -420,7 +673,9 @@ export default function ProductsPage() {
                 <input
                   type="text"
                   value={form.name}
-                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, name: e.target.value }))
+                  }
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Nama produk"
                 />
@@ -428,10 +683,14 @@ export default function ProductsPage() {
 
               {/* Description */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Deskripsi</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Deskripsi
+                </label>
                 <textarea
                   value={form.description}
-                  onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, description: e.target.value }))
+                  }
                   rows={2}
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                   placeholder="Deskripsi produk (opsional)"
@@ -440,10 +699,14 @@ export default function ProductsPage() {
 
               {/* Category */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Kategori</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Kategori
+                </label>
                 <select
                   value={form.categoryId}
-                  onChange={(e) => setForm((f) => ({ ...f, categoryId: e.target.value }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, categoryId: e.target.value }))
+                  }
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                 >
                   <option value="">— Tanpa Kategori —</option>
@@ -464,18 +727,24 @@ export default function ProductsPage() {
                   <input
                     type="number"
                     value={form.price}
-                    onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, price: e.target.value }))
+                    }
                     min={0}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="0"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">HPP</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    HPP
+                  </label>
                   <input
                     type="number"
                     value={form.cost}
-                    onChange={(e) => setForm((f) => ({ ...f, cost: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, cost: e.target.value }))
+                    }
                     min={0}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="0"
@@ -486,22 +755,30 @@ export default function ProductsPage() {
               {/* Stock + Min Stock */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Stok</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Stok
+                  </label>
                   <input
                     type="number"
                     value={form.stock}
-                    onChange={(e) => setForm((f) => ({ ...f, stock: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, stock: e.target.value }))
+                    }
                     min={0}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="0"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Stok Minimum</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Stok Minimum
+                  </label>
                   <input
                     type="number"
                     value={form.minStock}
-                    onChange={(e) => setForm((f) => ({ ...f, minStock: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, minStock: e.target.value }))
+                    }
                     min={0}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="5"
@@ -511,11 +788,15 @@ export default function ProductsPage() {
 
               {/* Image URL */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">URL Gambar</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  URL Gambar
+                </label>
                 <input
                   type="text"
                   value={form.imageUrl}
-                  onChange={(e) => setForm((f) => ({ ...f, imageUrl: e.target.value }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, imageUrl: e.target.value }))
+                  }
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="https://..."
                 />
