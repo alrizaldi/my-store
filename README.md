@@ -1,36 +1,117 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# My Store - Retail Management System
 
-## Getting Started
+My Store is a modern full-stack retail management application built with Next.js 16, designed for small to medium-sized physical stores. It provides comprehensive management capabilities for products, inventory, employees, orders, procurement, and promotions.
 
-First, run the development server:
+## Features
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+### Core Modules
+- **Authentication**: Login/logout and current user information management
+- **Dashboard**: Aggregated business metrics and analytics
+- **Product Management**: Full CRUD operations for products and categories
+- **Inventory Management**: Stock queries, in/out records, and transfers
+- **Order & Payment**: Complete order lifecycle management and payment status sync
+- **Procurement & Suppliers**: Purchase order management and supplier maintenance
+- **Employee & Permissions**: Employee information, role assignment, and session management
+- **Attendance & Cashier**: Employee attendance tracking and cashier interface
+- **Promotion Management**: Discount and promotion campaign configuration
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Technical Features
+- Next.js 16 with App Router (SSR/SSG/ISR mixed architecture)
+- TypeScript type safety
+- Prisma ORM with PostgreSQL database
+- Supabase for authentication and real-time capabilities
+- Tailwind CSS for styling
+- Responsive UI design
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Tech Stack
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **Frontend**: React 19.2.4 + Next.js 16.2.4
+- **Backend**: Next.js API Routes (Node.js runtime)
+- **Database**: PostgreSQL with Prisma ORM
+- **Authentication**: Supabase Auth
+- **Styling**: Tailwind CSS
+- **Font**: Geist (via `next/font`)
+- **Password Hashing**: bcryptjs
+- **JWT Handling**: jose library
 
-## Learn More
+## Installation & Setup
 
-To learn more about Next.js, take a look at the following resources:
+1. Clone the repository
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Set up environment variables (see `.env.example`)
+4. Run database migrations:
+   ```bash
+   npm run db:migrate
+   ```
+5. Generate Prisma client:
+   ```bash
+   npx prisma generate
+   ```
+6. Seed the database (optional):
+   ```bash
+   npm run db:seed
+   ```
+7. Start development server:
+   ```bash
+   npm run dev
+   ```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Scripts
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm run start` - Start production server
+- `npm run db:migrate` - Run database migrations
+- `npm run db:push` - Push schema to database
+- `npm run db:generate` - Generate Prisma client
+- `npm run db:studio` - Open Prisma Studio
+- `npm run db:seed` - Seed database with sample data
 
-## Deploy on Vercel
+## Deployment
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+This application is designed for deployment on Vercel. When deploying to Vercel:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Ensure `DATABASE_URL` is set in your Vercel project settings
+2. Update your build command to include Prisma generation:
+   ```
+   npx prisma generate && npm run build
+   ```
+3. Run database migrations after deployment (or set up automatic migration in your pipeline)
+
+## Architecture
+
+- **Server Components**: Support for Server Components with client hydration
+- **Route Groups**: `(auth)` and `(dashboard)` directories for logical isolation and layout reuse
+- **Middleware Authentication**: Authentication logic encapsulated in `lib/auth.ts`
+- **Repository Pattern**: Prisma client instance management in `lib/prisma.ts`
+- **API Routes as Controllers**: Each `route.ts` file corresponds to RESTful endpoints
+
+## Prisma v7+ Specifics
+
+This project follows Prisma v7+ best practices:
+
+1. Enums are no longer imported from `@prisma/client` and are defined locally as string literal unions
+2. The `tsconfig.json` excludes the `prisma` directory to prevent type checking errors
+3. Explicit type declarations for all callback parameters to prevent implicit `any` errors
+4. Proper handling of the Prisma client generation step in the build process
+
+## Security Considerations
+
+- Passwords are stored using bcryptjs salted hashing
+- JWT tokens handled securely with the jose library
+- All sensitive API routes must validate user sessions
+- Environment variables used for sensitive configuration
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
+
+## License
+
+This project is private and proprietary.
