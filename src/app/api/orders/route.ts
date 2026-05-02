@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
 
     // Validate each item
     for (const item of items) {
-      const product = products.find((p) => p.id === item.productId);
+      const product = products.find((p: { id: string }) => p.id === item.productId);
       if (!product) {
         return Response.json(
           { error: `Product ${item.productId} not found` },
