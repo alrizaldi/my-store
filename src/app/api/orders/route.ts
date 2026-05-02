@@ -17,8 +17,18 @@ export async function GET(request: NextRequest) {
     const skip = (page - 1) * limit;
 
     const where = {
-      ...(status ? { status: status as "PENDING" | "COMPLETED" | "CANCELLED" | "REFUNDED" } : {}),
-      ...(search ? { orderNumber: { contains: search, mode: "insensitive" as const } } : {}),
+      ...(status
+        ? {
+            status: status as
+              | "PENDING"
+              | "COMPLETED"
+              | "CANCELLED"
+              | "REFUNDED",
+          }
+        : {}),
+      ...(search
+        ? { orderNumber: { contains: search, mode: "insensitive" as const } }
+        : {}),
     };
 
     const [data, total] = await prisma.$transaction([
@@ -50,13 +60,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const {
-      items,
-      promoId,
-      notes,
-      sessionId,
-      taxRate,
-    } = body as {
+    const { items, promoId, notes, sessionId, taxRate } = body as {
       items: OrderItemInput[];
       promoId?: string;
       notes?: string;
@@ -66,7 +70,10 @@ export async function POST(request: NextRequest) {
 
     // Validate items array
     if (!items || !Array.isArray(items) || items.length === 0) {
-      return Response.json({ error: "items array is required and must not be empty" }, { status: 400 });
+      return Response.json(
+        { error: "items array is required and must not be empty" },
+        { status: 400 },
+      );
     }
 
     // Fetch all products
@@ -77,30 +84,36 @@ export async function POST(request: NextRequest) {
 
     // Validate each item
     for (const item of items) {
-      const product = products.find((p: { id: string }) => p.id === item.productId);
+      const product = products.find(
+        (p: { id: string }) => p.id === item.productId,
+      );
       if (!product) {
         return Response.json(
           { error: `Product ${item.productId} not found` },
-          { status: 400 }
+          { status: 400 },
         );
       }
       if (!product.isActive) {
         return Response.json(
           { error: `Product "${product.name}" is not active` },
-          { status: 400 }
+          { status: 400 },
         );
       }
       if (product.stock < item.quantity) {
         return Response.json(
-          { error: `Insufficient stock for product "${product.name}". Available: ${product.stock}` },
-          { status: 400 }
+          {
+            error: `Insufficient stock for product "${product.name}". Available: ${product.stock}`,
+          },
+          { status: 400 },
         );
       }
     }
 
     // Calculate subtotals per item
     const itemsWithCalc = items.map((item) => {
-      const product = products.find((p) => p.id === item.productId)!;
+      const product = products.find(
+        (p: { id: string }) => p.id === item.productId,
+      )!;
       const unitPrice = product.price;
       const discount = item.discount ?? 0;
       const subtotal = unitPrice * item.quantity - discount;
@@ -122,13 +135,18 @@ export async function POST(request: NextRequest) {
 
       const now = new Date();
       if (!promo.isActive || now < promo.startDate || now > promo.endDate) {
-        return Response.json({ error: "Promo is not valid or has expired" }, { status: 400 });
+        return Response.json(
+          { error: "Promo is not valid or has expired" },
+          { status: 400 },
+        );
       }
 
       if (promo.minOrder !== null && subtotal < promo.minOrder) {
         return Response.json(
-          { error: `Order subtotal does not meet the minimum order amount for this promo` },
-          { status: 400 }
+          {
+            error: `Order subtotal does not meet the minimum order amount for this promo`,
+          },
+          { status: 400 },
         );
       }
 
