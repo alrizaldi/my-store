@@ -1,6 +1,6 @@
 import { type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 
 export async function GET(request: NextRequest) {
   try {
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
       // stock <= minStock — Prisma does not support column-to-column comparisons
       // directly in the typed client. We use a raw filter to get the ids first.
       const rows = await prisma.$queryRaw<{ id: string }[]>(
-        Prisma.sql`SELECT id FROM products WHERE stock <= "minStock"`
+        Prisma.sql`SELECT id FROM products WHERE stock <= "minStock"`,
       );
       const ids = rows.map((r) => r.id);
       where.id = { in: ids };

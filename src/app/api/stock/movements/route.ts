@@ -1,6 +1,6 @@
 import { type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 
 export async function GET(request: NextRequest) {
   try {
@@ -34,7 +34,10 @@ export async function GET(request: NextRequest) {
     return Response.json({ data, total, page, limit });
   } catch (error) {
     console.error("[GET /api/stock/movements]", error);
-    return Response.json({ error: "Failed to fetch stock movements" }, { status: 500 });
+    return Response.json(
+      { error: "Failed to fetch stock movements" },
+      { status: 500 },
+    );
   }
 }
 
@@ -51,7 +54,7 @@ export async function POST(request: NextRequest) {
     if (!productId || !type || quantity === undefined || quantity === null) {
       return Response.json(
         { error: "productId, type, and quantity are required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -65,7 +68,9 @@ export async function POST(request: NextRequest) {
       });
 
       if (!product) {
-        throw Object.assign(new Error("Product not found"), { code: "NOT_FOUND" });
+        throw Object.assign(new Error("Product not found"), {
+          code: "NOT_FOUND",
+        });
       }
 
       let newStock: number;
@@ -76,7 +81,7 @@ export async function POST(request: NextRequest) {
         if (product.stock < quantity) {
           throw Object.assign(
             new Error(`Insufficient stock. Available: ${product.stock}`),
-            { code: "INSUFFICIENT_STOCK" }
+            { code: "INSUFFICIENT_STOCK" },
           );
         }
         newStock = product.stock - quantity;
@@ -122,16 +127,17 @@ export async function POST(request: NextRequest) {
       }
       if (code === "INSUFFICIENT_STOCK") {
         // Extract message from the error object safely
-        const errorMessage = typeof error === "object" && "message" in error 
-          ? (error as { message: string }).message 
-          : "Insufficient stock";
-        
-        return Response.json(
-          { error: errorMessage },
-          { status: 400 }
-        );
+        const errorMessage =
+          typeof error === "object" && "message" in error
+            ? (error as { message: string }).message
+            : "Insufficient stock";
+
+        return Response.json({ error: errorMessage }, { status: 400 });
       }
     }
-    return Response.json({ error: "Failed to create stock movement" }, { status: 500 });
+    return Response.json(
+      { error: "Failed to create stock movement" },
+      { status: 500 },
+    );
   }
 }
