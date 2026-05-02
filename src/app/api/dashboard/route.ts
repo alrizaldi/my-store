@@ -73,7 +73,7 @@ export async function GET(_request: NextRequest) {
     });
     
     const lowStockProducts = allActiveProducts.filter(
-      product => product.stock <= (product.minStock || 0)
+      (product: { stock: number; minStock: number | null }) => product.stock <= (product.minStock || 0)
     ).length;
 
     console.log("Products data fetched:", { allActiveProducts: allActiveProducts.length, lowStockProducts });
