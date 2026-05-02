@@ -1,7 +1,6 @@
 import { type NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { OrderStatus } from "@prisma/client";
 import { verifyToken } from "@/lib/auth";
 
 export async function GET(_request: NextRequest) {
@@ -34,7 +33,7 @@ export async function GET(_request: NextRequest) {
     const [todayOrdersData, todayCustomers] = await Promise.all([
       prisma.order.aggregate({
         where: {
-          status: OrderStatus.COMPLETED,
+          status: "COMPLETED",
           createdAt: { gte: todayStart, lte: todayEnd },
         },
         _count: { id: true },
@@ -52,7 +51,7 @@ export async function GET(_request: NextRequest) {
     // --- Month: completed orders and revenue ---
     const monthOrdersData = await prisma.order.aggregate({
       where: {
-        status: OrderStatus.COMPLETED,
+        status: "COMPLETED",
         createdAt: { gte: monthStart, lte: monthEnd },
       },
       _count: { id: true },
@@ -105,7 +104,7 @@ export async function GET(_request: NextRequest) {
       by: ["productId"],
       where: {
         order: {
-          status: OrderStatus.COMPLETED,
+          status: "COMPLETED",
           createdAt: { gte: monthStart, lte: monthEnd },
         },
       },
@@ -156,7 +155,7 @@ export async function GET(_request: NextRequest) {
 
         const agg = await prisma.order.aggregate({
           where: {
-            status: OrderStatus.COMPLETED,
+            status: "COMPLETED",
             createdAt: { gte: dayStart, lte: dayEnd },
           },
           _count: { id: true },
