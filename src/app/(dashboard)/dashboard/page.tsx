@@ -172,38 +172,38 @@ export default async function DashboardPage() {
         </div>
 
         {/* Recent Orders */}
-        <div className="xl:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100">
-          <div className="p-5 border-b border-gray-100">
+        <div className="xl:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="p-5 border-b border-gray-100 bg-gray-50">
             <h2 className="text-base font-semibold text-gray-900">Pesanan Terbaru</h2>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100">
-                  <th className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide pb-3 pr-4">No. Pesanan</th>
-                  <th className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide pb-3 pr-4">Kasir</th>
-                  <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wide pb-3 pr-4">Total</th>
-                  <th className="text-center text-xs font-semibold text-gray-400 uppercase tracking-wide pb-3 pr-4">Status</th>
-                  <th className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide pb-3">Waktu</th>
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide py-3 pl-5 pr-4">No. Pesanan</th>
+                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide py-3 pr-4">Kasir</th>
+                  <th className="text-right text-xs font-semibold text-gray-500 uppercase tracking-wide py-3 pr-4">Total</th>
+                  <th className="text-center text-xs font-semibold text-gray-500 uppercase tracking-wide py-3 pr-4">Status</th>
+                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide py-3 pr-5">Waktu</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-gray-100">
                 {data.recentOrders.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-8 text-center text-gray-400">Belum ada pesanan</td>
+                    <td colSpan={5} className="py-10 text-center text-gray-500">Belum ada pesanan</td>
                   </tr>
                 ) : (
                   data.recentOrders.map((order) => (
-                    <tr key={order.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="py-3 pr-4 font-mono text-blue-600 font-medium">{order.orderNumber}</td>
-                      <td className="py-3 pr-4 text-gray-700">{order.cashier?.name ?? "-"}</td>
-                      <td className="py-3 pr-4 text-right font-semibold text-gray-900">{formatIDR(order.total)}</td>
-                      <td className="py-3 pr-4 text-center">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_CLASSES[order.status] ?? "bg-gray-100 text-gray-600"}`}>
+                    <tr key={order.id} className="hover:bg-gray-50 transition-colors duration-150">
+                      <td className="py-4 pl-5 pr-4 font-mono text-blue-600 font-medium tracking-tight">{order.orderNumber}</td>
+                      <td className="py-4 pr-4 text-gray-700 font-medium">{order.cashier?.name ?? "-"}</td>
+                      <td className="py-4 pr-4 text-right font-semibold text-gray-900 tabular-nums">{formatIDR(order.total)}</td>
+                      <td className="py-4 pr-4 text-center">
+                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${STATUS_CLASSES[order.status] ?? "bg-gray-100 text-gray-600"}`}>
                           {STATUS_LABELS[order.status] ?? order.status}
                         </span>
                       </td>
-                      <td className="py-3 text-gray-400 text-xs">{formatDateTime(order.createdAt)}</td>
+                      <td className="py-4 pr-5 text-gray-500 text-sm tabular-nums">{formatDateTime(order.createdAt)}</td>
                     </tr>
                   ))
                 )}
