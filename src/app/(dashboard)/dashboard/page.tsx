@@ -1,4 +1,5 @@
 import { headers } from "next/headers";
+import { cookies } from "next/headers";
 
 const formatIDR = (amount: number) =>
   new Intl.NumberFormat("id-ID", {
@@ -72,12 +73,27 @@ export default async function DashboardPage() {
   const headersList = await headers();
   const host = headersList.get("host");
   const proto = "http";
-
+  
+  // Get the auth cookie to include in the request
+  const cookieStore = await cookies();
+  const authToken = cookieStore.get("auth-token");
+  
   let data: DashboardData | null = null;
   let error: string | null = null;
 
   try {
-    const res = await fetch(`${proto}://${host}/api/dashboard`, { cache: "no-store" });
+    const fetchOptions: RequestInit = {
+      cache: "no-store",
+    };
+    
+    // Include the auth token in the request if available
+    if (authToken) {
+      fetchOptions.headers = {
+        "Cookie": `${authToken.name}=${authToken.value}`
+      };
+    }
+    
+    const res = await fetch(`${proto}://${host}/api/dashboard`, fetchOptions);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     data = await res.json();
   } catch (e) {

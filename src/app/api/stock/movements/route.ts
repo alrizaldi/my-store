@@ -121,8 +121,13 @@ export async function POST(request: NextRequest) {
         return Response.json({ error: "Product not found" }, { status: 404 });
       }
       if (code === "INSUFFICIENT_STOCK") {
+        // Extract message from the error object safely
+        const errorMessage = typeof error === "object" && "message" in error 
+          ? (error as { message: string }).message 
+          : "Insufficient stock";
+        
         return Response.json(
-          { error: (error as Error).message },
+          { error: errorMessage },
           { status: 400 }
         );
       }
