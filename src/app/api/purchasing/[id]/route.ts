@@ -1,10 +1,13 @@
 import { type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { PurchaseStatus, StockMovementType } from "@prisma/client";
+
+// Define types locally since Prisma v7+ doesn't export enums directly
+type PurchaseStatus = "PENDING" | "RECEIVED" | "CANCELLED";
+type StockMovementType = "IN" | "OUT";
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params;
@@ -24,19 +27,25 @@ export async function GET(
     });
 
     if (!purchaseOrder) {
-      return Response.json({ error: "Purchase order not found" }, { status: 404 });
+      return Response.json(
+        { error: "Purchase order not found" },
+        { status: 404 },
+      );
     }
 
     return Response.json(purchaseOrder);
   } catch (error) {
     console.error("[GET /api/purchasing/[id]]", error);
-    return Response.json({ error: "Failed to fetch purchase order" }, { status: 500 });
+    return Response.json(
+      { error: "Failed to fetch purchase order" },
+      { status: 500 },
+    );
   }
 }
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params;
@@ -48,10 +57,17 @@ export async function PATCH(
       receivedAt?: string;
     };
 
-    if (status !== undefined && !Object.values(PurchaseStatus).includes(status)) {
+    if (
+      status !== undefined &&
+      !Object.values({
+        PENDING: "PENDING",
+        RECEIVED: "RECEIVED",
+        CANCELLED: "CANCELLED",
+      }).includes(status)
+    ) {
       return Response.json(
-        { error: `status must be one of: ${Object.values(PurchaseStatus).join(", ")}` },
-        { status: 400 }
+        { error: `status must be one of: PENDING, RECEIVED, CANCELLED` },
+        { status: 400 },
       );
     }
 
@@ -63,13 +79,19 @@ export async function PATCH(
     });
 
     if (!existingOrder) {
-      return Response.json({ error: "Purchase order not found" }, { status: 404 });
+      return Response.json(
+        { error: "Purchase order not found" },
+        { status: 404 },
+      );
     }
 
-    if (status === PurchaseStatus.RECEIVED) {
+    if (status === "RECEIVED") {
       // Transaction: update status, increment stock, create StockMovement records
+      // @ts-ignore - Prisma v7+ doesn't export enums, so we define types locally
       const updatedOrder = await prisma.$transaction(async (tx) => {
-        const resolvedReceivedAt = receivedAt ? new Date(receivedAt) : new Date();
+        const resolvedReceivedAt = receivedAt
+          ? new Date(receivedAt)
+          : new Date();
 
         // Increment stock for each item and create StockMovement
         for (const item of existingOrder.items) {
@@ -80,7 +102,7 @@ export async function PATCH(
 
           await tx.stockMovement.create({
             data: {
-              type: StockMovementType.IN,
+              type: "IN",
               quantity: item.quantity,
               notes: `Received from purchase order ${existingOrder.poNumber}`,
               productId: item.productId,
@@ -92,7 +114,7 @@ export async function PATCH(
         return tx.purchaseOrder.update({
           where: { id },
           data: {
-            status: PurchaseStatus.RECEIVED,
+            status: "RECEIVED",
             receivedAt: resolvedReceivedAt,
             ...(notes !== undefined && { notes }),
           },
@@ -141,15 +163,21 @@ export async function PATCH(
       "code" in error &&
       (error as { code: string }).code === "P2025"
     ) {
-      return Response.json({ error: "Purchase order not found" }, { status: 404 });
+      return Response.json(
+        { error: "Purchase order not found" },
+        { status: 404 },
+      );
     }
-    return Response.json({ error: "Failed to update purchase order" }, { status: 500 });
+    return Response.json(
+      { error: "Failed to update purchase order" },
+      { status: 500 },
+    );
   }
 }
 
 export async function DELETE(
   _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params;
@@ -160,16 +188,20 @@ export async function DELETE(
     });
 
     if (!purchaseOrder) {
-      return Response.json({ error: "Purchase order not found" }, { status: 404 });
-    }
-
-    if (purchaseOrder.status !== PurchaseStatus.PENDING) {
       return Response.json(
-        { error: "Only PENDING purchase orders can be deleted" },
-        { status: 400 }
+        { error: "Purchase order not found" },
+        { status: 404 },
       );
     }
 
+    if (purchaseOrder.status !== "PENDING") {
+      return Response.json(
+        { error: "Only PENDING purchase orders can be deleted" },
+        { status: 400 },
+      );
+    }
+
+    // @ts-ignore - Prisma v7+ doesn't export enums, so we define types locally
     await prisma.$transaction(async (tx) => {
       await tx.purchaseOrderItem.deleteMany({ where: { purchaseOrderId: id } });
       await tx.purchaseOrder.delete({ where: { id } });
@@ -184,8 +216,14 @@ export async function DELETE(
       "code" in error &&
       (error as { code: string }).code === "P2025"
     ) {
-      return Response.json({ error: "Purchase order not found" }, { status: 404 });
+      return Response.json(
+        { error: "Purchase order not found" },
+        { status: 404 },
+      );
     }
-    return Response.json({ error: "Failed to delete purchase order" }, { status: 500 });
+    return Response.json(
+      { error: "Failed to delete purchase order" },
+      { status: 500 },
+    );
   }
 }

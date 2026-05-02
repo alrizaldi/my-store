@@ -1,10 +1,9 @@
 import { type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { PromoType } from "@prisma/client";
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params;
@@ -38,7 +37,7 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params;
@@ -59,7 +58,7 @@ export async function PATCH(
       name?: string;
       description?: string;
       code?: string;
-      type?: PromoType;
+      type?: "FIXED" | "PERCENTAGE";
       value?: number;
       minOrder?: number;
       maxDiscount?: number;
@@ -72,22 +71,30 @@ export async function PATCH(
       return Response.json({ error: "name cannot be empty" }, { status: 400 });
     }
 
-    if (type !== undefined && !Object.values(PromoType).includes(type)) {
+    const allowedTypes = ["FIXED", "PERCENTAGE"];
+    if (type !== undefined && !allowedTypes.includes(type as string)) {
       return Response.json(
-        { error: `type must be one of: ${Object.values(PromoType).join(", ")}` },
-        { status: 400 }
+        { error: `type must be one of: ${allowedTypes.join(", ")}` },
+        { status: 400 },
       );
     }
 
     if (value !== undefined && Number(value) <= 0) {
-      return Response.json({ error: "value must be greater than 0" }, { status: 400 });
+      return Response.json(
+        { error: "value must be greater than 0" },
+        { status: 400 },
+      );
     }
 
     // If updating type to PERCENTAGE or value with existing PERCENTAGE type, validate range
-    if (type === PromoType.PERCENTAGE && value !== undefined && (Number(value) < 1 || Number(value) > 100)) {
+    if (
+      type === "PERCENTAGE" &&
+      value !== undefined &&
+      (Number(value) < 1 || Number(value) > 100)
+    ) {
       return Response.json(
         { error: "value must be between 1 and 100 for PERCENTAGE type" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -98,7 +105,10 @@ export async function PATCH(
     if (startDate !== undefined) {
       start = new Date(startDate);
       if (isNaN(start.getTime())) {
-        return Response.json({ error: "startDate is invalid" }, { status: 400 });
+        return Response.json(
+          { error: "startDate is invalid" },
+          { status: 400 },
+        );
       }
     }
     if (endDate !== undefined) {
@@ -111,12 +121,15 @@ export async function PATCH(
     if (start !== undefined && end !== undefined && start >= end) {
       return Response.json(
         { error: "startDate must be before endDate" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     // If only one date is provided, fetch the existing record to compare
-    if ((start !== undefined && end === undefined) || (start === undefined && end !== undefined)) {
+    if (
+      (start !== undefined && end === undefined) ||
+      (start === undefined && end !== undefined)
+    ) {
       const existing = await prisma.promo.findUnique({
         where: { id },
         select: { startDate: true, endDate: true },
@@ -129,7 +142,7 @@ export async function PATCH(
       if (effectiveStart >= effectiveEnd) {
         return Response.json(
           { error: "startDate must be before endDate" },
-          { status: 400 }
+          { status: 400 },
         );
       }
     }
@@ -179,7 +192,10 @@ export async function PATCH(
       "code" in error &&
       (error as { code: string }).code === "P2002"
     ) {
-      return Response.json({ error: "Promo code already exists" }, { status: 409 });
+      return Response.json(
+        { error: "Promo code already exists" },
+        { status: 409 },
+      );
     }
     return Response.json({ error: "Failed to update promo" }, { status: 500 });
   }
@@ -187,7 +203,7 @@ export async function PATCH(
 
 export async function DELETE(
   _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params;
@@ -208,10 +224,11 @@ export async function DELETE(
     if (promo._count.orders > 0) {
       return Response.json(
         { error: "Cannot delete promo used in orders" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
+    // @ts-ignore: Transaction client type cannot be imported in Prisma v7+
     await prisma.$transaction(async (tx) => {
       await tx.promoProduct.deleteMany({ where: { promoId: id } });
       await tx.promo.delete({ where: { id } });

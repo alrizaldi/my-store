@@ -1,6 +1,8 @@
 import { type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { PurchaseStatus } from "@prisma/client";
+
+// Define type locally since Prisma v7+ doesn't export enums directly
+type PurchaseStatus = "PENDING" | "RECEIVED" | "CANCELLED";
 
 export async function GET(request: NextRequest) {
   try {
@@ -99,17 +101,15 @@ export async function POST(request: NextRequest) {
     const taxAmount = tax !== undefined ? Number(tax) : 0;
 
     const itemsWithSubtotals = items.map((item) => ({
-      productId: item.productId,
-      quantity: Number(item.quantity),
-      unitCost: Number(item.unitCost),
-      subtotal: Number(item.quantity) * Number(item.unitCost),
+      ...item,
+      subtotal: item.quantity * item.unitCost,
     }));
 
     const subtotal = itemsWithSubtotals.reduce((sum, item) => sum + item.subtotal, 0);
     const total = subtotal + taxAmount;
 
     const purchaseOrder = await prisma.$transaction(async (tx) => {
-      return tx.purchaseOrder.create({
+      const createdOrder = await tx.purchaseOrder.create({
         data: {
           poNumber,
           supplierId,
@@ -139,11 +139,24 @@ export async function POST(request: NextRequest) {
           },
         },
       });
+
+      return createdOrder;
     });
 
     return Response.json(purchaseOrder, { status: 201 });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("[POST /api/purchasing]", error);
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code: string }).code === "P2002"
+    ) {
+      return Response.json(
+        { error: "Purchase order with this PO number already exists" },
+        { status: 409 }
+      );
+    }
     return Response.json({ error: "Failed to create purchase order" }, { status: 500 });
   }
 }

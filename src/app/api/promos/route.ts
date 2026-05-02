@@ -1,6 +1,8 @@
 import { type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { PromoType } from "@prisma/client";
+
+// Define PromoType locally since Prisma v7+ doesn't export enums directly
+type PromoType = "PERCENTAGE" | "FIXED";
 
 export async function GET(request: NextRequest) {
   try {
@@ -84,9 +86,9 @@ export async function POST(request: NextRequest) {
     if (!type) {
       return Response.json({ error: "type is required" }, { status: 400 });
     }
-    if (!Object.values(PromoType).includes(type)) {
+    if (!Object.values({ PERCENTAGE: "PERCENTAGE", FIXED: "FIXED" }).includes(type)) {
       return Response.json(
-        { error: `type must be one of: ${Object.values(PromoType).join(", ")}` },
+        { error: `type must be one of: PERCENTAGE, FIXED` },
         { status: 400 }
       );
     }
@@ -96,7 +98,7 @@ export async function POST(request: NextRequest) {
     if (Number(value) <= 0) {
       return Response.json({ error: "value must be greater than 0" }, { status: 400 });
     }
-    if (type === PromoType.PERCENTAGE && (Number(value) < 1 || Number(value) > 100)) {
+    if (type === "PERCENTAGE" && (Number(value) < 1 || Number(value) > 100)) {
       return Response.json(
         { error: "value must be between 1 and 100 for PERCENTAGE type" },
         { status: 400 }
