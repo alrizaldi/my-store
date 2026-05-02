@@ -42,14 +42,20 @@ export async function GET(_request: NextRequest) {
     });
 
     // --- Totals: products, employees, suppliers, lowStockProducts ---
-    // lowStockProducts: products where stock <= minStock (column comparison via raw query)
-    const lowStockResult = await prisma.$queryRaw<[{ count: bigint }]>`
-      SELECT COUNT(*) as count
-      FROM products
-      WHERE is_active = true
-        AND stock <= min_stock
-    `;
-    const lowStockProducts = Number(lowStockResult[0].count);
+    // Get all active products to calculate low stock in application code
+    const allActiveProducts = await prisma.product.findMany({
+      where: { 
+        isActive: true 
+      },
+      select: {
+        stock: true,
+        minStock: true,
+      },
+    });
+    
+    const lowStockProducts = allActiveProducts.filter(
+      product => product.stock <= (product.minStock || 0)
+    ).length;
 
     const [totalProducts, totalEmployees, totalSuppliers] = await Promise.all([
       prisma.product.count({ where: { isActive: true } }),

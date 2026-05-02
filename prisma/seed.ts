@@ -1,10 +1,15 @@
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
 import bcrypt from "bcryptjs";
 
-const prisma = new PrismaClient({
-  datasourceUrl: process.env.DATABASE_URL,
+const pool = new Pool({
+  connectionString: process.env.MYSTORE_DATABASE_URL,
 });
+
+const adapter = new PrismaPg(pool);
+const prisma = new PrismaClient({ adapter });
 
 async function main() {
   console.log("🌱 Seeding database...");
@@ -16,13 +21,20 @@ async function main() {
     create: {
       name: "Admin",
       permissions: [
-        "orders:read", "orders:write",
-        "products:read", "products:write",
-        "employees:read", "employees:write",
-        "stock:read", "stock:write",
-        "purchasing:read", "purchasing:write",
-        "reports:read", "settings:write",
-        "cashier:use", "attendance:write",
+        "orders:read",
+        "orders:write",
+        "products:read",
+        "products:write",
+        "employees:read",
+        "employees:write",
+        "stock:read",
+        "stock:write",
+        "purchasing:read",
+        "purchasing:write",
+        "reports:read",
+        "settings:write",
+        "cashier:use",
+        "attendance:write",
       ],
     },
   });
@@ -32,7 +44,12 @@ async function main() {
     update: {},
     create: {
       name: "Cashier",
-      permissions: ["orders:read", "orders:write", "products:read", "cashier:use"],
+      permissions: [
+        "orders:read",
+        "orders:write",
+        "products:read",
+        "cashier:use",
+      ],
     },
   });
 
@@ -42,12 +59,18 @@ async function main() {
     create: {
       name: "Manager",
       permissions: [
-        "orders:read", "orders:write",
-        "products:read", "products:write",
-        "stock:read", "stock:write",
-        "purchasing:read", "purchasing:write",
-        "reports:read", "employees:read",
-        "cashier:use", "attendance:write",
+        "orders:read",
+        "orders:write",
+        "products:read",
+        "products:write",
+        "stock:read",
+        "stock:write",
+        "purchasing:read",
+        "purchasing:write",
+        "reports:read",
+        "employees:read",
+        "cashier:use",
+        "attendance:write",
       ],
     },
   });
@@ -106,16 +129,96 @@ async function main() {
 
   // Products
   const products = [
-    { sku: "BEV-001", name: "Air Mineral 600ml", price: 3000, cost: 1500, stock: 100, minStock: 20, categoryId: createdCategories["Food & Beverages"] },
-    { sku: "BEV-002", name: "Teh Botol 350ml", price: 5000, cost: 2500, stock: 80, minStock: 15, categoryId: createdCategories["Food & Beverages"] },
-    { sku: "BEV-003", name: "Kopi Sachet", price: 2500, cost: 1200, stock: 200, minStock: 50, categoryId: createdCategories["Food & Beverages"] },
-    { sku: "SNK-001", name: "Chitato 60g", price: 12000, cost: 8000, stock: 50, minStock: 10, categoryId: createdCategories["Food & Beverages"] },
-    { sku: "SNK-002", name: "Oreo Original", price: 8000, cost: 5000, stock: 60, minStock: 10, categoryId: createdCategories["Food & Beverages"] },
-    { sku: "ELC-001", name: "Baterai AA 4pcs", price: 15000, cost: 8000, stock: 30, minStock: 5, categoryId: createdCategories["Electronics"] },
-    { sku: "ELC-002", name: "Kabel USB Type-C", price: 25000, cost: 12000, stock: 20, minStock: 5, categoryId: createdCategories["Electronics"] },
-    { sku: "HLT-001", name: "Masker Medis 1box", price: 20000, cost: 12000, stock: 40, minStock: 10, categoryId: createdCategories["Health & Beauty"] },
-    { sku: "HLT-002", name: "Hand Sanitizer 100ml", price: 18000, cost: 10000, stock: 35, minStock: 8, categoryId: createdCategories["Health & Beauty"] },
-    { sku: "HSH-001", name: "Sabun Mandi Batang", price: 5000, cost: 2500, stock: 5, minStock: 10, categoryId: createdCategories["Household"] },
+    {
+      sku: "BEV-001",
+      name: "Air Mineral 600ml",
+      price: 3000,
+      cost: 1500,
+      stock: 100,
+      minStock: 20,
+      categoryId: createdCategories["Food & Beverages"],
+    },
+    {
+      sku: "BEV-002",
+      name: "Teh Botol 350ml",
+      price: 5000,
+      cost: 2500,
+      stock: 80,
+      minStock: 15,
+      categoryId: createdCategories["Food & Beverages"],
+    },
+    {
+      sku: "BEV-003",
+      name: "Kopi Sachet",
+      price: 2500,
+      cost: 1200,
+      stock: 200,
+      minStock: 50,
+      categoryId: createdCategories["Food & Beverages"],
+    },
+    {
+      sku: "SNK-001",
+      name: "Chitato 60g",
+      price: 12000,
+      cost: 8000,
+      stock: 50,
+      minStock: 10,
+      categoryId: createdCategories["Food & Beverages"],
+    },
+    {
+      sku: "SNK-002",
+      name: "Oreo Original",
+      price: 8000,
+      cost: 5000,
+      stock: 60,
+      minStock: 10,
+      categoryId: createdCategories["Food & Beverages"],
+    },
+    {
+      sku: "ELC-001",
+      name: "Baterai AA 4pcs",
+      price: 15000,
+      cost: 8000,
+      stock: 30,
+      minStock: 5,
+      categoryId: createdCategories["Electronics"],
+    },
+    {
+      sku: "ELC-002",
+      name: "Kabel USB Type-C",
+      price: 25000,
+      cost: 12000,
+      stock: 20,
+      minStock: 5,
+      categoryId: createdCategories["Electronics"],
+    },
+    {
+      sku: "HLT-001",
+      name: "Masker Medis 1box",
+      price: 20000,
+      cost: 12000,
+      stock: 40,
+      minStock: 10,
+      categoryId: createdCategories["Health & Beauty"],
+    },
+    {
+      sku: "HLT-002",
+      name: "Hand Sanitizer 100ml",
+      price: 18000,
+      cost: 10000,
+      stock: 35,
+      minStock: 8,
+      categoryId: createdCategories["Health & Beauty"],
+    },
+    {
+      sku: "HSH-001",
+      name: "Sabun Mandi Batang",
+      price: 5000,
+      cost: 2500,
+      stock: 5,
+      minStock: 10,
+      categoryId: createdCategories["Household"],
+    },
   ];
 
   for (const product of products) {
@@ -129,26 +232,28 @@ async function main() {
   console.log("✅ Products created");
 
   // Supplier
-  await prisma.supplier.upsert({
-    where: { id: "supplier-default" },
-    update: {},
-    create: {
-      id: "supplier-default",
-      name: "PT Sumber Jaya Abadi",
-      phone: "021-55501234",
-      email: "order@sumberjaya.com",
-      address: "Jl. Industri Raya No. 45, Jakarta",
-    },
-  }).catch(() =>
-    prisma.supplier.create({
-      data: {
+  await prisma.supplier
+    .upsert({
+      where: { id: "supplier-default" },
+      update: {},
+      create: {
+        id: "supplier-default",
         name: "PT Sumber Jaya Abadi",
         phone: "021-55501234",
         email: "order@sumberjaya.com",
         address: "Jl. Industri Raya No. 45, Jakarta",
       },
     })
-  );
+    .catch(() =>
+      prisma.supplier.create({
+        data: {
+          name: "PT Sumber Jaya Abadi",
+          phone: "021-55501234",
+          email: "order@sumberjaya.com",
+          address: "Jl. Industri Raya No. 45, Jakarta",
+        },
+      }),
+    );
 
   console.log("✅ Supplier created");
 

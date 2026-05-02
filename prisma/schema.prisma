@@ -6,8 +6,6 @@ datasource db {
   provider = "postgresql"
 }
 
-// ─── Auth & Users ────────────────────────────────────────────────────────────
-
 model Role {
   id          String   @id @default(cuid())
   name        String   @unique
@@ -20,26 +18,23 @@ model Role {
 }
 
 model User {
-  id         String   @id @default(cuid())
+  id         String           @id @default(cuid())
   name       String
-  email      String   @unique
+  email      String           @unique
   password   String
   phone      String?
   avatar     String?
-  isActive   Boolean  @default(true)
+  isActive   Boolean          @default(true)
   roleId     String
-  role       Role     @relation(fields: [roleId], references: [id])
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  attendance Attendance[]
   sessions   CashierSession[]
   orders     Order[]
-  attendance Attendance[]
+  role       Role             @relation(fields: [roleId], references: [id])
 
   @@map("users")
 }
-
-// ─── Products & Categories ───────────────────────────────────────────────────
 
 model Category {
   id          String    @id @default(cuid())
@@ -53,25 +48,24 @@ model Category {
 }
 
 model Product {
-  id          String    @id @default(cuid())
-  sku         String    @unique
-  name        String
-  description String?
-  price       Float
-  cost        Float     @default(0)
-  stock       Int       @default(0)
-  minStock    Int       @default(5)
-  imageUrl    String?
-  isActive    Boolean   @default(true)
-  categoryId  String?
-  category    Category? @relation(fields: [categoryId], references: [id])
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
+  id             String              @id @default(cuid())
+  name           String
+  description    String?
+  price          Float
+  stock          Int                 @default(0)
+  imageUrl       String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  categoryId     String?
+  cost           Float               @default(0)
+  isActive       Boolean             @default(true)
+  minStock       Int                 @default(5)
+  sku            String              @unique
   orderItems     OrderItem[]
-  stockMovements StockMovement[]
-  purchaseItems  PurchaseOrderItem[]
+  category       Category?           @relation(fields: [categoryId], references: [id])
   promoProducts  PromoProduct[]
+  purchaseItems  PurchaseOrderItem[]
+  stockMovements StockMovement[]
 
   @@map("products")
 }
@@ -82,42 +76,32 @@ model StockMovement {
   quantity    Int
   notes       String?
   productId   String
-  product     Product           @relation(fields: [productId], references: [id])
   referenceId String?
   createdAt   DateTime          @default(now())
+  product     Product           @relation(fields: [productId], references: [id])
 
   @@map("stock_movements")
 }
 
-enum StockMovementType {
-  IN
-  OUT
-  ADJUSTMENT
-  RETURN
-}
-
-// ─── Orders & Payments ───────────────────────────────────────────────────────
-
 model Order {
-  id          String         @id @default(cuid())
-  orderNumber String         @unique
-  status      OrderStatus    @default(PENDING)
-  subtotal    Float
-  discount    Float          @default(0)
-  tax         Float          @default(0)
+  id          String          @id @default(cuid())
+  status      OrderStatus     @default(PENDING)
   total       Float
-  notes       String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
   cashierId   String?
-  cashier     User?          @relation(fields: [cashierId], references: [id])
-  sessionId   String?
-  session     CashierSession? @relation(fields: [sessionId], references: [id])
+  discount    Float           @default(0)
+  notes       String?
+  orderNumber String          @unique
   promoId     String?
-  promo       Promo?         @relation(fields: [promoId], references: [id])
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-
-  items    OrderItem[]
-  payments Payment[]
+  sessionId   String?
+  subtotal    Float
+  tax         Float           @default(0)
+  items       OrderItem[]
+  cashier     User?           @relation(fields: [cashierId], references: [id])
+  promo       Promo?          @relation(fields: [promoId], references: [id])
+  session     CashierSession? @relation(fields: [sessionId], references: [id])
+  payments    Payment[]
 
   @@map("orders")
 }
@@ -125,22 +109,15 @@ model Order {
 model OrderItem {
   id        String  @id @default(cuid())
   quantity  Int
-  unitPrice Float
+  productId String
+  orderId   String
   discount  Float   @default(0)
   subtotal  Float
-  productId String
-  product   Product @relation(fields: [productId], references: [id])
-  orderId   String
+  unitPrice Float
   order     Order   @relation(fields: [orderId], references: [id])
+  product   Product @relation(fields: [productId], references: [id])
 
   @@map("order_items")
-}
-
-enum OrderStatus {
-  PENDING
-  COMPLETED
-  CANCELLED
-  REFUNDED
 }
 
 model Payment {
@@ -151,48 +128,25 @@ model Payment {
   reference String?
   status    PaymentStatus @default(PENDING)
   orderId   String
-  order     Order         @relation(fields: [orderId], references: [id])
   createdAt DateTime      @default(now())
+  order     Order         @relation(fields: [orderId], references: [id])
 
   @@map("payments")
 }
 
-enum PaymentMethod {
-  CASH
-  CARD
-  QRIS
-  TRANSFER
-}
-
-enum PaymentStatus {
-  PENDING
-  COMPLETED
-  FAILED
-  REFUNDED
-}
-
-// ─── Cashier Sessions ────────────────────────────────────────────────────────
-
 model CashierSession {
   id        String        @id @default(cuid())
   cashierId String
-  cashier   User          @relation(fields: [cashierId], references: [id])
   startCash Float
   endCash   Float?
   status    SessionStatus @default(OPEN)
   openedAt  DateTime      @default(now())
   closedAt  DateTime?
+  cashier   User          @relation(fields: [cashierId], references: [id])
   orders    Order[]
 
   @@map("cashier_sessions")
 }
-
-enum SessionStatus {
-  OPEN
-  CLOSED
-}
-
-// ─── Purchasing ──────────────────────────────────────────────────────────────
 
 model Supplier {
   id        String          @id @default(cuid())
@@ -212,7 +166,6 @@ model PurchaseOrder {
   id         String              @id @default(cuid())
   poNumber   String              @unique
   supplierId String
-  supplier   Supplier            @relation(fields: [supplierId], references: [id])
   status     PurchaseStatus      @default(PENDING)
   subtotal   Float
   tax        Float               @default(0)
@@ -223,6 +176,7 @@ model PurchaseOrder {
   createdAt  DateTime            @default(now())
   updatedAt  DateTime            @updatedAt
   items      PurchaseOrderItem[]
+  supplier   Supplier            @relation(fields: [supplierId], references: [id])
 
   @@map("purchase_orders")
 }
@@ -233,21 +187,12 @@ model PurchaseOrderItem {
   unitCost        Float
   subtotal        Float
   productId       String
-  product         Product       @relation(fields: [productId], references: [id])
   purchaseOrderId String
+  product         Product       @relation(fields: [productId], references: [id])
   purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
 
   @@map("purchase_order_items")
 }
-
-enum PurchaseStatus {
-  PENDING
-  ORDERED
-  RECEIVED
-  CANCELLED
-}
-
-// ─── Promos ──────────────────────────────────────────────────────────────────
 
 model Promo {
   id          String         @id @default(cuid())
@@ -263,9 +208,8 @@ model Promo {
   isActive    Boolean        @default(true)
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
-
-  orders   Order[]
-  products PromoProduct[]
+  orders      Order[]
+  products    PromoProduct[]
 
   @@map("promos")
 }
@@ -273,25 +217,17 @@ model Promo {
 model PromoProduct {
   id        String  @id @default(cuid())
   promoId   String
-  promo     Promo   @relation(fields: [promoId], references: [id])
   productId String
   product   Product @relation(fields: [productId], references: [id])
+  promo     Promo   @relation(fields: [promoId], references: [id])
 
   @@unique([promoId, productId])
   @@map("promo_products")
 }
 
-enum PromoType {
-  PERCENTAGE
-  FIXED
-}
-
-// ─── Attendance ──────────────────────────────────────────────────────────────
-
 model Attendance {
   id        String           @id @default(cuid())
   userId    String
-  user      User             @relation(fields: [userId], references: [id])
   date      DateTime         @db.Date
   checkIn   DateTime?
   checkOut  DateTime?
@@ -299,9 +235,55 @@ model Attendance {
   notes     String?
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
+  user      User             @relation(fields: [userId], references: [id])
 
   @@unique([userId, date])
   @@map("attendance")
+}
+
+enum StockMovementType {
+  IN
+  OUT
+  ADJUSTMENT
+  RETURN
+}
+
+enum OrderStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  QRIS
+  TRANSFER
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum SessionStatus {
+  OPEN
+  CLOSED
+}
+
+enum PurchaseStatus {
+  PENDING
+  ORDERED
+  RECEIVED
+  CANCELLED
+}
+
+enum PromoType {
+  PERCENTAGE
+  FIXED
 }
 
 enum AttendanceStatus {
