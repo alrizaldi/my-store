@@ -1,7 +1,6 @@
 import { type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-// Define types locally since Prisma v7+ doesn't export enums directly
 type OrderStatus = "PENDING" | "COMPLETED" | "CANCELLED" | "REFUNDED";
 type PaymentStatus = "PENDING" | "COMPLETED" | "FAILED" | "REFUNDED";
 type PaymentMethod = "CASH" | "CARD" | "QRIS" | "TRANSFER" | "OTHER";
@@ -11,7 +10,7 @@ interface SessionOrder {
   orderNumber: string;
   total: number;
   status: OrderStatus;
-  createdAt: Date;  // Changed from string to Date to match Prisma return type
+  createdAt: Date;
   payments: Array<{
     method: PaymentMethod;
     amount: number;
@@ -55,7 +54,6 @@ export async function GET(
       return Response.json({ error: "Session not found" }, { status: 404 });
     }
 
-    // Compute summary
     const completedOrders = session.orders.filter((o: SessionOrder) => o.status === "COMPLETED");
     const totalRevenue = completedOrders.reduce((sum, o: SessionOrder) => sum + o.total, 0);
 
@@ -71,8 +69,12 @@ export async function GET(
     const totalQris = completedPayments
       .filter((p) => p.method === "QRIS")
       .reduce((sum, p) => sum + p.amount, 0);
+    const totalTransfer = completedPayments
+      .filter((p) => p.method === "TRANSFER")
+      .reduce((sum, p) => sum + p.amount, 0);
 
-    // Strip payments from orders in response (internal computation only)
+    const expectedCash = session.startCash + totalCash;
+
     const orders = session.orders.map(({ payments: _payments, ...order }) => order);
 
     return Response.json({
@@ -81,9 +83,14 @@ export async function GET(
       summary: {
         totalOrders: completedOrders.length,
         totalRevenue,
-        totalCash,
-        totalCard,
-        totalQris,
+        startCash: session.startCash,
+        expectedCash,
+        payments: {
+          cash: totalCash,
+          card: totalCard,
+          qris: totalQris,
+          transfer: totalTransfer,
+        },
       },
     });
   } catch (error) {
@@ -99,25 +106,101 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { endCash, status } = body as {
-      endCash?: number;
-      status?: "OPEN" | "CLOSED";
-    };
+    const endCash = body.endCash as number | undefined;
+    const status = body.status as "OPEN" | "CLOSED" | undefined;
 
-    if (status === "CLOSED" && (endCash === undefined || endCash === null)) {
-      return Response.json(
-        { error: "endCash is required when closing a session" },
-        { status: 400 }
-      );
+    // Handle close session
+    if (status === "CLOSED") {
+      if (endCash === undefined || endCash === null) {
+        return Response.json(
+          { error: "endCash is required when closing a session" },
+          { status: 400 }
+        );
+      }
+
+      const session = await prisma.cashierSession.findUnique({
+        where: { id },
+        include: {
+          orders: {
+            where: { status: "COMPLETED" },
+            select: {
+              payments: {
+                select: {
+                  method: true,
+                  amount: true,
+                  status: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!session) {
+        return Response.json({ error: "Session not found" }, { status: 404 });
+      }
+
+      const allPayments = session.orders.flatMap((o) => o.payments);
+      const completedPayments = allPayments.filter((p) => p.status === "COMPLETED");
+
+      const totalCash = completedPayments
+        .filter((p) => p.method === "CASH")
+        .reduce((sum, p) => sum + p.amount, 0);
+      const totalCard = completedPayments
+        .filter((p) => p.method === "CARD")
+        .reduce((sum, p) => sum + p.amount, 0);
+      const totalQris = completedPayments
+        .filter((p) => p.method === "QRIS")
+        .reduce((sum, p) => sum + p.amount, 0);
+      const totalTransfer = completedPayments
+        .filter((p) => p.method === "TRANSFER")
+        .reduce((sum, p) => sum + p.amount, 0);
+
+      const expectedCash = session.startCash + totalCash;
+      const actualCash = endCash!;
+      const variance = actualCash - expectedCash;
+      const totalRevenue = completedPayments.reduce((sum, p) => sum + p.amount, 0);
+
+      const updatedSession = await prisma.cashierSession.update({
+        where: { id },
+        data: {
+          endCash,
+          status: "CLOSED",
+          closedAt: new Date(),
+        },
+        include: {
+          cashier: {
+            select: { id: true, name: true, email: true },
+          },
+        },
+      });
+
+      return Response.json({
+        ...updatedSession,
+        closingStatement: {
+          startCash: session.startCash,
+          endCash: actualCash,
+          expectedCash,
+          variance,
+          totalRevenue,
+          payments: {
+            cash: totalCash,
+            card: totalCard,
+            qris: totalQris,
+            transfer: totalTransfer,
+          },
+        },
+      });
     }
+
+    // Handle other updates - can only be OPEN or undefined at this point
+    const updateData: { endCash?: number; status?: "OPEN" } = {};
+    if (endCash !== undefined) updateData.endCash = endCash;
+    if (status !== undefined) updateData.status = "OPEN";
 
     const session = await prisma.cashierSession.update({
       where: { id },
-      data: {
-        ...(endCash !== undefined && { endCash }),
-        ...(status !== undefined && { status }),
-        ...(status === "CLOSED" && { closedAt: new Date() }),
-      },
+      data: updateData,
       include: {
         cashier: {
           select: { id: true, name: true, email: true },

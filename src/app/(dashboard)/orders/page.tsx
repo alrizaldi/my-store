@@ -312,6 +312,9 @@ export default function OrdersPage() {
                   Kasir
                 </th>
                 <th className="text-center px-4 py-3 font-semibold text-gray-600">
+                  Sesi
+                </th>
+                <th className="text-center px-4 py-3 font-semibold text-gray-600">
                   Item
                 </th>
                 <th className="text-right px-4 py-3 font-semibold text-gray-600">
@@ -334,13 +337,13 @@ export default function OrdersPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-gray-400">
+                  <td colSpan={10} className="py-12 text-center text-gray-400">
                     <div className="inline-block w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
                   </td>
                 </tr>
               ) : orders.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-gray-400">
+                  <td colSpan={10} className="py-12 text-center text-gray-400">
                     Tidak ada pesanan ditemukan
                   </td>
                 </tr>
@@ -360,6 +363,13 @@ export default function OrdersPage() {
                       {order.cashier?.name ?? (
                         <span className="text-gray-300 italic">—</span>
                       )}
+                    </td>
+                    <td className="px-4 py-3 text-center text-gray-600">
+                      {order.session?.id
+                        ? order.session.id.slice(0, 8) + "..."
+                        : (
+                          <span className="text-gray-300 italic">—</span>
+                        )}
                     </td>
                     <td className="px-4 py-3 text-center text-gray-600">
                       {order.items.reduce((s, i) => s + i.quantity, 0)}

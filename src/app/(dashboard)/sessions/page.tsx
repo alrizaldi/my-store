@@ -25,9 +25,14 @@ interface CashierSession {
 interface SessionSummary {
   totalOrders: number;
   totalRevenue: number;
-  totalCash: number;
-  totalCard: number;
-  totalQris: number;
+  startCash: number;
+  expectedCash: number;
+  payments: {
+    cash: number;
+    card: number;
+    qris: number;
+    transfer: number;
+  };
 }
 
 interface SessionDetail extends CashierSession {
@@ -330,21 +335,28 @@ export default function SessionsPage() {
                       <span className="w-2 h-2 rounded-full bg-green-400 inline-block" />
                       Cash
                     </span>
-                    <span>{formatIDR(viewingSession.summary.totalCash)}</span>
+                    <span>{formatIDR(viewingSession.summary.payments.cash)}</span>
                   </div>
                   <div className="flex justify-between text-gray-600">
                     <span className="flex items-center gap-1">
                       <span className="w-2 h-2 rounded-full bg-blue-400 inline-block" />
                       Card
                     </span>
-                    <span>{formatIDR(viewingSession.summary.totalCard)}</span>
+                    <span>{formatIDR(viewingSession.summary.payments.card)}</span>
                   </div>
                   <div className="flex justify-between text-gray-600">
                     <span className="flex items-center gap-1">
                       <span className="w-2 h-2 rounded-full bg-purple-400 inline-block" />
                       QRIS
                     </span>
-                    <span>{formatIDR(viewingSession.summary.totalQris)}</span>
+                    <span>{formatIDR(viewingSession.summary.payments.qris)}</span>
+                  </div>
+                  <div className="flex justify-between text-gray-600">
+                    <span className="flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-orange-400 inline-block" />
+                      Transfer
+                    </span>
+                    <span>{formatIDR(viewingSession.summary.payments.transfer)}</span>
                   </div>
                 </div>
               </div>
@@ -368,6 +380,26 @@ export default function SessionsPage() {
               {viewingSession.status === "OPEN" && (
                 <div className="border border-orange-200 bg-orange-50 rounded-lg p-4 space-y-3">
                   <p className="text-sm font-medium text-orange-800">Tutup Sesi</p>
+                  <div className="grid grid-cols-2 gap-3 bg-white rounded-lg p-3">
+                    <div>
+                      <p className="text-xs text-gray-500">Kas Awal</p>
+                      <p className="font-medium text-gray-900">
+                        {formatIDR(viewingSession.summary.startCash)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Kas yang Diterima</p>
+                      <p className="font-medium text-gray-900">
+                        {formatIDR(viewingSession.summary.payments.cash)}
+                      </p>
+                    </div>
+                    <div className="col-span-2 border-t border-orange-200 pt-2">
+                      <p className="text-xs text-gray-500">Expected Kas Akhir</p>
+                      <p className="font-bold text-orange-700 text-lg">
+                        {formatIDR(viewingSession.summary.expectedCash)}
+                      </p>
+                    </div>
+                  </div>
                   <div>
                     <label className="block text-xs font-medium text-orange-700 mb-1">
                       Jumlah Kas Akhir (Rp) <span className="text-red-500">*</span>
@@ -381,6 +413,22 @@ export default function SessionsPage() {
                       placeholder="Masukkan jumlah kas akhir"
                     />
                   </div>
+                  {endCash && !isNaN(parseFloat(endCash)) && (
+                    <div className="bg-white rounded-lg p-3 border border-gray-200">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Selisih</span>
+                        <span className={`font-bold ${
+                          parseFloat(endCash) - viewingSession.summary.expectedCash === 0
+                            ? "text-green-600"
+                            : parseFloat(endCash) - viewingSession.summary.expectedCash > 0
+                            ? "text-blue-600"
+                            : "text-red-600"
+                        }`}>
+                          {formatIDR(parseFloat(endCash) - viewingSession.summary.expectedCash)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                   <button
                     onClick={handleCloseSession}
                     disabled={closingSession}

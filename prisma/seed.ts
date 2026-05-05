@@ -1,7 +1,23 @@
+import { config } from "dotenv";
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
 import bcrypt from "bcryptjs";
 
-const prisma = new PrismaClient();
+config();
+
+const databaseUrl = process.env.MYSTORE_DATABASE_URL;
+if (!databaseUrl) {
+  throw new Error("MYSTORE_DATABASE_URL not set");
+}
+
+const pool = new Pool({
+  connectionString: databaseUrl,
+  ssl: { rejectUnauthorized: false },
+});
+
+const adapter = new PrismaPg(pool);
+const prisma = new PrismaClient({ adapter });
 
 async function main() {
   console.log("🌱 Seeding database...");
@@ -13,6 +29,7 @@ async function main() {
     create: {
       name: "Admin",
       permissions: [
+        "dashboard:read",
         "orders:read",
         "orders:write",
         "products:read",
@@ -23,10 +40,23 @@ async function main() {
         "stock:write",
         "purchasing:read",
         "purchasing:write",
+        "suppliers:read",
+        "suppliers:write",
+        "promos:read",
+        "promos:write",
+        "payments:read",
         "reports:read",
         "settings:write",
         "cashier:use",
+        "session:open",
+        "session:close",
+        "sessions:read",
+        "attendance:read",
         "attendance:write",
+        "roles:read",
+        "roles:write",
+        "categories:read",
+        "categories:write",
       ],
     },
   });
@@ -37,10 +67,13 @@ async function main() {
     create: {
       name: "Cashier",
       permissions: [
+        "dashboard:read",
         "orders:read",
         "orders:write",
         "products:read",
         "cashier:use",
+        "session:open",
+        "session:close",
       ],
     },
   });
@@ -51,6 +84,7 @@ async function main() {
     create: {
       name: "Manager",
       permissions: [
+        "dashboard:read",
         "orders:read",
         "orders:write",
         "products:read",
@@ -59,10 +93,21 @@ async function main() {
         "stock:write",
         "purchasing:read",
         "purchasing:write",
+        "suppliers:read",
+        "suppliers:write",
+        "promos:read",
+        "promos:write",
+        "payments:read",
         "reports:read",
         "employees:read",
         "cashier:use",
+        "session:open",
+        "session:close",
+        "sessions:read",
+        "attendance:read",
         "attendance:write",
+        "categories:read",
+        "categories:write",
       ],
     },
   });

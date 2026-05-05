@@ -10,7 +10,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   if (!payload) redirect("/login");
 
-  const user = { name: payload.name, email: payload.email, role: payload.role };
+  const user = { 
+    name: payload.name, 
+    email: payload.email, 
+    role: payload.role,
+    permissions: payload.permissions 
+  };
 
   return (
     <div className="flex min-h-screen bg-gray-50">

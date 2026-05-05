@@ -1,676 +1,464 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter, usePathname } from "next/navigation";
 
-// ---- Types ----------------------------------------------------------------
-
-interface Category {
-  id: string;
-  name: string;
-}
-
-interface Product {
-  id: string;
-  name: string;
-  price: number;
-  stock: number;
-  minStock: number;
-  categoryId: string | null;
-}
-
-interface CartItem {
-  productId: string;
-  name: string;
-  price: number;
-  qty: number;
-  stock: number;
-}
-
-interface Promo {
-  id: string;
-  code: string | null;
-  name: string;
-  type: "PERCENTAGE" | "FIXED";
-  value: number;
-  minOrder: number | null;
-  maxDiscount: number | null;
-  startDate: string;
-  endDate: string;
-  isActive: boolean;
-}
-
-interface CompletedOrder {
-  id: string;
-  orderNumber: string;
-  total: number;
-}
-
-// ---- Currency formatter ---------------------------------------------------
-
-const formatIDR = (amount: number) =>
+const formatIDR = (n: number) =>
   new Intl.NumberFormat("id-ID", {
     style: "currency",
     currency: "IDR",
     minimumFractionDigits: 0,
-  }).format(amount);
+  }).format(n);
 
-// ---- Payment methods ------------------------------------------------------
+interface CashierSession {
+  id: string;
+  status: "OPEN" | "CLOSED";
+  startCash: number;
+  endCash: number | null;
+  openedAt: string;
+  summary?: {
+    totalOrders: number;
+    totalRevenue: number;
+    startCash: number;
+    expectedCash: number;
+    payments: {
+      cash: number;
+      card: number;
+      qris: number;
+      transfer: number;
+    };
+  };
+}
 
-const PAYMENT_METHODS = ["CASH", "CARD", "QRIS", "TRANSFER"] as const;
-type PaymentMethod = (typeof PAYMENT_METHODS)[number];
+interface Alert {
+  message: string;
+  type: "success" | "error";
+}
 
-// ==========================================================================
+export default function CashierDashboard() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [session, setSession] = useState<CashierSession | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [opening, setOpening] = useState(false);
+  const [startCash, setStartCash] = useState("");
+  const [alert, setAlert] = useState<Alert | null>(null);
 
-export default function CashierPage() {
-  // ---- Product / catalog state -------------------------------------------
-  const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [search, setSearch] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("");
-  const [loadingProducts, setLoadingProducts] = useState(false);
+  // State for closing session
+  const [closing, setClosing] = useState(false);
+  const [endCash, setEndCash] = useState("");
+  const [showCloseModal, setShowCloseModal] = useState(false);
 
-  // ---- Cart state ---------------------------------------------------------
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const showAlert = (message: string, type: "success" | "error") => {
+    setAlert({ message, type });
+    setTimeout(() => setAlert(null), 4000);
+  };
 
-  // ---- Promo state --------------------------------------------------------
-  const [promoCode, setPromoCode] = useState("");
-  const [promo, setPromo] = useState<Promo | null>(null);
-  const [promoError, setPromoError] = useState("");
-  const [promoLoading, setPromoLoading] = useState(false);
-
-  // ---- Payment state ------------------------------------------------------
-  const [taxEnabled, setTaxEnabled] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
-  const [amountPaid, setAmountPaid] = useState("");
-  const [processing, setProcessing] = useState(false);
-  const [paymentError, setPaymentError] = useState("");
-
-  // ---- Success state ------------------------------------------------------
-  const [lastOrder, setLastOrder] = useState<CompletedOrder | null>(null);
-  const [lastChange, setLastChange] = useState(0);
-
-  // ---- Fetch categories on mount -----------------------------------------
-  useEffect(() => {
-    fetch("/api/categories")
-      .then((r) => r.json())
-      .then((data: Category[]) => setCategories(Array.isArray(data) ? data : []))
-      .catch(() => setCategories([]));
+  const fetchOpenSession = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/sessions?status=OPEN&limit=1");
+      const json = await res.json();
+      if (json.data && json.data.length > 0) {
+        const sessionId = json.data[0].id;
+        const detailRes = await fetch(`/api/sessions/${sessionId}`);
+        const detail = await detailRes.json();
+        setSession(detail);
+      } else {
+        setSession(null);
+      }
+    } catch {
+      setSession(null);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  // ---- Fetch products when search/category changes -----------------------
-  const fetchProducts = useCallback(() => {
-    setLoadingProducts(true);
-    const params = new URLSearchParams({ limit: "100" });
-    if (search) params.set("search", search);
-    if (selectedCategory) params.set("categoryId", selectedCategory);
-
-    fetch(`/api/products?${params}`)
-      .then((r) => r.json())
-      .then((res: { data: Product[] }) => setProducts(Array.isArray(res.data) ? res.data : []))
-      .catch(() => setProducts([]))
-      .finally(() => setLoadingProducts(false));
-  }, [search, selectedCategory]);
-
+  // Initial load and refresh when returning from POS
   useEffect(() => {
-    const timer = setTimeout(fetchProducts, 300);
-    return () => clearTimeout(timer);
-  }, [fetchProducts]);
+    fetchOpenSession();
+  }, [fetchOpenSession]);
 
-  // ---- Cart calculations --------------------------------------------------
-  const subtotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
-
-  const discount = promo
-    ? promo.type === "PERCENTAGE"
-      ? Math.min(
-          subtotal * (promo.value / 100),
-          promo.maxDiscount !== null ? promo.maxDiscount : Infinity
-        )
-      : promo.value
-    : 0;
-
-  const taxable = subtotal - discount;
-  const tax = taxEnabled ? taxable * 0.1 : 0;
-  const total = taxable + tax;
-
-  const amountPaidNum = parseFloat(amountPaid.replace(/\D/g, "")) || 0;
-  const change = paymentMethod === "CASH" ? Math.max(0, amountPaidNum - total) : 0;
-
-  // ---- Cart actions -------------------------------------------------------
-  const addToCart = (product: Product) => {
-    setCart((prev) => {
-      const existing = prev.find((i) => i.productId === product.id);
-      if (existing) {
-        if (existing.qty >= product.stock) return prev;
-        return prev.map((i) =>
-          i.productId === product.id ? { ...i, qty: i.qty + 1 } : i
-        );
+  // Refresh when page becomes visible (user returns from POS)
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (!document.hidden) {
+        fetchOpenSession();
       }
-      if (product.stock < 1) return prev;
-      return [
-        ...prev,
-        {
-          productId: product.id,
-          name: product.name,
-          price: product.price,
-          qty: 1,
-          stock: product.stock,
-        },
-      ];
-    });
-  };
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [fetchOpenSession]);
 
-  const updateQty = (productId: string, delta: number) => {
-    setCart((prev) => {
-      return prev
-        .map((i) => (i.productId === productId ? { ...i, qty: i.qty + delta } : i))
-        .filter((i) => i.qty > 0);
-    });
-  };
-
-  const removeFromCart = (productId: string) => {
-    setCart((prev) => prev.filter((i) => i.productId !== productId));
-  };
-
-  // ---- Promo actions ------------------------------------------------------
-  const applyPromo = async () => {
-    if (!promoCode.trim()) return;
-    setPromoLoading(true);
-    setPromoError("");
-    setPromo(null);
-
-    try {
-      const res = await fetch(`/api/promos?search=${encodeURIComponent(promoCode.trim())}`);
-      const json = await res.json();
-      const list: Promo[] = Array.isArray(json.data) ? json.data : [];
-      const found = list.find(
-        (p) => p.code?.toLowerCase() === promoCode.trim().toLowerCase()
-      );
-
-      if (!found) {
-        setPromoError("Kode promo tidak ditemukan");
-        return;
-      }
-
-      const now = new Date();
-      const start = new Date(found.startDate);
-      const end = new Date(found.endDate);
-
-      if (!found.isActive || now < start || now > end) {
-        setPromoError("Promo tidak aktif atau sudah kedaluwarsa");
-        return;
-      }
-
-      if (found.minOrder !== null && subtotal < found.minOrder) {
-        setPromoError(`Minimum belanja ${formatIDR(found.minOrder)}`);
-        return;
-      }
-
-      setPromo(found);
-    } catch {
-      setPromoError("Gagal memvalidasi promo");
-    } finally {
-      setPromoLoading(false);
-    }
-  };
-
-  const removePromo = () => {
-    setPromo(null);
-    setPromoCode("");
-    setPromoError("");
-  };
-
-  // ---- Process Payment ----------------------------------------------------
-  const processPayment = async () => {
-    if (cart.length === 0) return;
-    if (paymentMethod === "CASH" && amountPaidNum < total) {
-      setPaymentError("Jumlah pembayaran kurang dari total");
+  const openSession = async () => {
+    const parsed = parseFloat(startCash);
+    if (!startCash || isNaN(parsed) || parsed < 0) {
+      showAlert("Masukkan jumlah kas awal yang valid", "error");
       return;
     }
-
-    setProcessing(true);
-    setPaymentError("");
-
+    setOpening(true);
     try {
-      // 1. Create order
-      const orderRes = await fetch("/api/orders", {
+      const res = await fetch("/api/sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          items: cart.map((i) => ({ productId: i.productId, quantity: i.qty })),
-          promoId: promo?.id ?? undefined,
-          taxRate: taxEnabled ? 0.1 : 0,
-        }),
+        body: JSON.stringify({ startCash: parsed }),
       });
-
-      if (!orderRes.ok) {
-        const err = await orderRes.json();
-        throw new Error(err.error ?? "Gagal membuat pesanan");
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error ?? "Gagal membuka sesi");
       }
-
-      const order: CompletedOrder = await orderRes.json();
-
-      // 2. Create payment
-      const paymentRes = await fetch("/api/payments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          orderId: order.id,
-          method: paymentMethod,
-          amount: paymentMethod === "CASH" ? amountPaidNum : total,
-        }),
-      });
-
-      if (!paymentRes.ok) {
-        const err = await paymentRes.json();
-        throw new Error(err.error ?? "Gagal memproses pembayaran");
-      }
-
-      setLastOrder(order);
-      setLastChange(change);
-    } catch (e) {
-      setPaymentError(e instanceof Error ? e.message : "Terjadi kesalahan");
+      showAlert("Sesi berhasil dibuka", "success");
+      fetchOpenSession();
+    } catch (err) {
+      showAlert(err instanceof Error ? err.message : "Gagal membuka sesi", "error");
     } finally {
-      setProcessing(false);
+      setOpening(false);
     }
   };
 
-  // ---- Reset after success ------------------------------------------------
-  const resetAll = () => {
-    setCart([]);
-    setPromo(null);
-    setPromoCode("");
-    setPromoError("");
-    setTaxEnabled(false);
-    setPaymentMethod("CASH");
-    setAmountPaid("");
-    setPaymentError("");
-    setLastOrder(null);
-    setLastChange(0);
+  const handleCloseSession = async () => {
+    if (!session) return;
+    const parsed = parseFloat(endCash);
+    if (!endCash || isNaN(parsed) || parsed < 0) {
+      showAlert("Masukkan jumlah kas akhir yang valid", "error");
+      return;
+    }
+    setClosing(true);
+    try {
+      const res = await fetch(`/api/sessions/${session.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "CLOSED", endCash: parsed }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error ?? "Gagal menutup sesi");
+      }
+      showAlert("Sesi berhasil ditutup", "success");
+      setShowCloseModal(false);
+      setEndCash("");
+      fetchOpenSession();
+    } catch (err) {
+      showAlert(err instanceof Error ? err.message : "Gagal menutup sesi", "error");
+    } finally {
+      setClosing(false);
+    }
   };
 
-  // ---- Success screen -----------------------------------------------------
-  if (lastOrder) {
+  if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[70vh]">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-10 text-center max-w-sm w-full">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <h2 className="text-xl font-bold text-gray-900 mb-1">Pesanan Selesai!</h2>
-          <p className="text-gray-500 text-sm mb-4">Pembayaran berhasil diproses</p>
-
-          <div className="bg-gray-50 rounded-xl p-4 mb-6 text-left space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500">No. Pesanan</span>
-              <span className="font-mono font-semibold text-blue-600">{lastOrder.orderNumber}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Total</span>
-              <span className="font-semibold text-gray-900">{formatIDR(lastOrder.total)}</span>
-            </div>
-            {paymentMethod === "CASH" && (
-              <>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Dibayar</span>
-                  <span className="font-semibold text-gray-900">{formatIDR(amountPaidNum)}</span>
-                </div>
-                <div className="flex justify-between text-sm border-t border-gray-200 pt-2">
-                  <span className="text-gray-700 font-medium">Kembalian</span>
-                  <span className="font-bold text-green-600 text-base">{formatIDR(lastChange)}</span>
-                </div>
-              </>
-            )}
-          </div>
-
-          <button
-            onClick={resetAll}
-            className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-colors"
-          >
-            Pesanan Baru
-          </button>
-        </div>
+      <div className="flex items-center justify-center h-[60vh]">
+        <div className="text-gray-400">Memuat...</div>
       </div>
     );
   }
 
-  // ---- Main POS layout ----------------------------------------------------
   return (
-    <div className="flex gap-4 h-[calc(100vh-7rem)]">
-      {/* ============================================================
-          LEFT: Product catalog
-      ============================================================ */}
-      <div className="flex-1 flex flex-col gap-3 min-w-0">
-        {/* Search */}
-        <div className="relative">
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          <input
-            type="text"
-            placeholder="Cari produk..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
+    <div className="max-w-2xl mx-auto space-y-6">
+      <h1 className="text-2xl font-bold text-gray-900">Kasir</h1>
+
+      {alert && (
+        <div
+          className={`px-4 py-3 rounded-lg text-sm font-medium ${
+            alert.type === "success"
+              ? "bg-green-50 text-green-800 border border-green-200"
+              : "bg-red-50 text-red-800 border border-red-200"
+          }`}
+        >
+          {alert.message}
         </div>
+      )}
 
-        {/* Category filter */}
-        <div className="flex gap-2 overflow-x-auto pb-1 flex-shrink-0">
-          <button
-            onClick={() => setSelectedCategory("")}
-            className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              selectedCategory === ""
-                ? "bg-blue-600 text-white"
-                : "bg-white text-gray-600 border border-gray-200 hover:border-blue-300"
-            }`}
-          >
-            Semua
-          </button>
-          {categories.map((cat) => (
-            <button
-              key={cat.id}
-              onClick={() => setSelectedCategory(cat.id)}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                selectedCategory === cat.id
-                  ? "bg-blue-600 text-white"
-                  : "bg-white text-gray-600 border border-gray-200 hover:border-blue-300"
-              }`}
-            >
-              {cat.name}
-            </button>
-          ))}
-        </div>
-
-        {/* Product grid */}
-        <div className="flex-1 overflow-y-auto">
-          {loadingProducts ? (
-            <div className="flex items-center justify-center h-40">
-              <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : products.length === 0 ? (
-            <div className="flex items-center justify-center h-40 text-gray-400 text-sm">
-              Tidak ada produk ditemukan
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 pb-2">
-              {products.map((product) => {
-                const inCart = cart.find((i) => i.productId === product.id);
-                const isLowStock = product.stock <= product.minStock;
-                const outOfStock = product.stock === 0;
-
-                return (
-                  <button
-                    key={product.id}
-                    onClick={() => addToCart(product)}
-                    disabled={outOfStock}
-                    className={`relative bg-white rounded-xl border p-3 text-left transition-all ${
-                      outOfStock
-                        ? "opacity-50 cursor-not-allowed border-gray-100"
-                        : inCart
-                        ? "border-blue-400 ring-1 ring-blue-400 shadow-sm"
-                        : "border-gray-100 hover:border-blue-300 hover:shadow-sm"
-                    }`}
-                  >
-                    {/* Stock badge */}
-                    <span
-                      className={`absolute top-2 right-2 text-xs px-1.5 py-0.5 rounded-full font-medium ${
-                        outOfStock
-                          ? "bg-red-100 text-red-600"
-                          : isLowStock
-                          ? "bg-orange-100 text-orange-600"
-                          : "bg-green-100 text-green-600"
-                      }`}
-                    >
-                      {outOfStock ? "Habis" : `${product.stock}`}
-                    </span>
-
-                    {/* In-cart badge */}
-                    {inCart && (
-                      <span className="absolute top-2 left-2 w-5 h-5 bg-blue-600 text-white text-xs rounded-full flex items-center justify-center font-bold">
-                        {inCart.qty}
-                      </span>
-                    )}
-
-                    <div className="mt-4 mb-1">
-                      <p className="text-sm font-semibold text-gray-900 leading-tight line-clamp-2">
-                        {product.name}
-                      </p>
-                    </div>
-                    <p className="text-blue-600 font-bold text-sm">{formatIDR(product.price)}</p>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ============================================================
-          RIGHT: Cart + Payment
-      ============================================================ */}
-      <div className="w-96 flex-shrink-0 flex flex-col bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-        {/* Cart header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-          <div className="flex items-center gap-2">
-            <h2 className="font-semibold text-gray-900">Keranjang</h2>
-            {cart.length > 0 && (
-              <span className="w-5 h-5 bg-blue-600 text-white text-xs rounded-full flex items-center justify-center font-bold">
-                {cart.reduce((s, i) => s + i.qty, 0)}
-              </span>
-            )}
-          </div>
-          {cart.length > 0 && (
-            <button
-              onClick={() => setCart([])}
-              className="text-xs text-red-500 hover:text-red-600 transition-colors"
-            >
-              Hapus Semua
-            </button>
-          )}
-        </div>
-
-        {/* Cart items */}
-        <div className="flex-1 overflow-y-auto divide-y divide-gray-50">
-          {cart.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-gray-300 gap-2 py-12">
-              <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-              <p className="text-sm">Keranjang kosong</p>
-            </div>
-          ) : (
-            cart.map((item) => (
-              <div key={item.productId} className="px-4 py-2.5 flex items-center gap-2">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{item.name}</p>
-                  <p className="text-xs text-gray-400">{formatIDR(item.price)} / pcs</p>
+      {session ? (
+        <div className="space-y-4">
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-sm text-gray-500">Status Sesi</p>
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                  <span className="font-semibold text-gray-900">BUKA</span>
                 </div>
+              </div>
+              <div className="text-right">
+                <p className="text-sm text-gray-500">Kas Awal</p>
+                <p className="font-semibold text-gray-900">
+                  {formatIDR(session.startCash)}
+                </p>
+              </div>
+            </div>
 
-                {/* Qty controls */}
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => updateQty(item.productId, -1)}
-                    className="w-6 h-6 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-600 flex items-center justify-center text-sm font-bold transition-colors"
-                  >
-                    −
-                  </button>
-                  <span className="w-6 text-center text-sm font-semibold text-gray-900">
-                    {item.qty}
-                  </span>
-                  <button
-                    onClick={() => updateQty(item.productId, 1)}
-                    disabled={item.qty >= item.stock}
-                    className="w-6 h-6 rounded-md bg-gray-100 hover:bg-gray-200 disabled:opacity-40 text-gray-600 flex items-center justify-center text-sm font-bold transition-colors"
-                  >
-                    +
-                  </button>
-                </div>
-
-                {/* Line total */}
-                <div className="w-20 text-right flex-shrink-0">
-                  <p className="text-sm font-semibold text-gray-900">
-                    {formatIDR(item.price * item.qty)}
+            {session.summary && (
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <p className="text-gray-500">Total Order</p>
+                  <p className="text-xl font-bold text-gray-900">
+                    {session.summary.totalOrders}
                   </p>
                 </div>
-
-                {/* Remove */}
-                <button
-                  onClick={() => removeFromCart(item.productId)}
-                  className="text-gray-300 hover:text-red-500 transition-colors flex-shrink-0"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <p className="text-gray-500">Total Pendapatan</p>
+                  <p className="text-xl font-bold text-green-600">
+                    {formatIDR(session.summary.totalRevenue)}
+                  </p>
+                </div>
               </div>
-            ))
-          )}
+            )}
+
+            {session.summary && (
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <p className="text-xs text-gray-500 font-medium mb-2">
+                  Rincian Pembayaran
+                </p>
+                <div className="grid grid-cols-4 gap-2 text-sm">
+                  <div className="text-center">
+                    <p className="text-gray-500">Cash</p>
+                    <p className="font-semibold text-gray-900">
+                      {formatIDR(session.summary.payments.cash)}
+                    </p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-gray-500">Card</p>
+                    <p className="font-semibold text-gray-900">
+                      {formatIDR(session.summary.payments.card)}
+                    </p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-gray-500">QRIS</p>
+                    <p className="font-semibold text-gray-900">
+                      {formatIDR(session.summary.payments.qris)}
+                    </p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-gray-500">Transfer</p>
+                    <p className="font-semibold text-gray-900">
+                      {formatIDR(session.summary.payments.transfer)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={() => router.push("/cashier/pos")}
+              className="w-full mt-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+            >
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+                />
+              </svg>
+              Buka Kasir / POS
+            </button>
+
+            {/* Close Session Button */}
+            <button
+              onClick={() => {
+                setEndCash(session.summary?.expectedCash?.toString() || "");
+                setShowCloseModal(true);
+              }}
+              className="w-full mt-2 py-3 bg-orange-100 hover:bg-orange-200 text-orange-700 font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+            >
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                />
+              </svg>
+              Tutup Sesi
+            </button>
+          </div>
         </div>
-
-        {/* Bottom panel: totals + payment */}
-        <div className="border-t border-gray-100 px-4 pt-3 pb-4 space-y-3">
-          {/* Promo */}
-          <div>
-            {promo ? (
-              <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-                <div>
-                  <p className="text-xs font-semibold text-green-700">{promo.code} diterapkan</p>
-                  <p className="text-xs text-green-600">{promo.name}</p>
-                </div>
-                <button onClick={removePromo} className="text-green-600 hover:text-red-500 transition-colors">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            ) : (
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Kode promo"
-                  value={promoCode}
-                  onChange={(e) => { setPromoCode(e.target.value); setPromoError(""); }}
-                  onKeyDown={(e) => e.key === "Enter" && applyPromo()}
-                  className="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
+      ) : (
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="text-center mb-6">
+            <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-3">
+              <svg
+                className="w-6 h-6 text-orange-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
-                <button
-                  onClick={applyPromo}
-                  disabled={promoLoading || !promoCode.trim()}
-                  className="px-3 py-1.5 text-sm bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg font-medium transition-colors disabled:opacity-50"
-                >
-                  {promoLoading ? "..." : "Terapkan"}
-                </button>
-              </div>
-            )}
-            {promoError && <p className="text-xs text-red-500 mt-1">{promoError}</p>}
-          </div>
-
-          {/* Totals breakdown */}
-          <div className="space-y-1 text-sm">
-            <div className="flex justify-between text-gray-500">
-              <span>Subtotal</span>
-              <span>{formatIDR(subtotal)}</span>
+              </svg>
             </div>
-            {discount > 0 && (
-              <div className="flex justify-between text-green-600">
-                <span>Diskon</span>
-                <span>- {formatIDR(discount)}</span>
-              </div>
-            )}
-            <div className="flex justify-between items-center text-gray-500">
-              <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={taxEnabled}
-                  onChange={(e) => setTaxEnabled(e.target.checked)}
-                  className="w-3.5 h-3.5 rounded accent-blue-600"
-                />
-                <span>Pajak (10%)</span>
-              </label>
-              <span>{taxEnabled ? formatIDR(tax) : "-"}</span>
-            </div>
-            <div className="flex justify-between font-bold text-base text-gray-900 pt-1 border-t border-gray-100">
-              <span>Total</span>
-              <span>{formatIDR(total)}</span>
-            </div>
-          </div>
-
-          {/* Payment method */}
-          <div>
-            <p className="text-xs text-gray-400 font-medium mb-1.5">Metode Pembayaran</p>
-            <div className="grid grid-cols-4 gap-1.5">
-              {PAYMENT_METHODS.map((method) => (
-                <button
-                  key={method}
-                  onClick={() => setPaymentMethod(method)}
-                  className={`py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                    paymentMethod === method
-                      ? "bg-blue-600 text-white"
-                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                  }`}
-                >
-                  {method}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Amount paid (CASH only) */}
-          {paymentMethod === "CASH" && (
-            <div className="space-y-1">
-              <label className="text-xs text-gray-400 font-medium">Jumlah Dibayar</label>
-              <input
-                type="number"
-                placeholder="Masukkan jumlah"
-                value={amountPaid}
-                onChange={(e) => setAmountPaid(e.target.value)}
-                min={0}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-              {amountPaidNum >= total && total > 0 && (
-                <div className="flex justify-between text-sm font-medium">
-                  <span className="text-gray-500">Kembalian</span>
-                  <span className="text-green-600 font-bold">{formatIDR(change)}</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Error */}
-          {paymentError && (
-            <p className="text-xs text-red-500 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-              {paymentError}
+            <h2 className="font-semibold text-gray-900">Belum Ada Sesi Aktif</h2>
+            <p className="text-sm text-gray-500 mt-1">
+              Buka sesi terlebih dahulu untuk mulai transaksi
             </p>
-          )}
+          </div>
 
-          {/* Process button */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Kas Awal (Rp)
+            </label>
+            <input
+              type="number"
+              min="0"
+              value={startCash}
+              onChange={(e) => setStartCash(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Masukkan jumlah kas awal"
+            />
+          </div>
+
           <button
-            onClick={processPayment}
-            disabled={
-              cart.length === 0 ||
-              processing ||
-              (paymentMethod === "CASH" && amountPaidNum < total)
-            }
-            className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+            onClick={openSession}
+            disabled={opening}
+            className="w-full mt-4 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
           >
-            {processing ? (
+{opening ? (
               <>
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Memproses...
+                Membuka Sesi...
               </>
             ) : (
               <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 4v16m8-8H4"
+                  />
                 </svg>
-                Proses Pembayaran
+                Buka Sesi Kasir
               </>
             )}
           </button>
         </div>
-      </div>
+      )}
     </div>
   );
+
+  // Close Session Modal
+  if (showCloseModal && session) {
+    const sess = session as NonNullable<CashierSession>;
+    const expectedCash = sess.summary?.expectedCash || 0;
+    const actualEndCash = parseFloat(endCash) || 0;
+    const variance = actualEndCash - expectedCash;
+
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900">Tutup Sesi Kasir</h2>
+          </div>
+
+          <div className="p-6 space-y-4">
+            <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Kas Awal</span>
+                <span className="font-medium">{formatIDR(sess.startCash)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Kas Diterima (Cash)</span>
+                <span className="font-medium">{formatIDR(sess.summary?.payments?.cash || 0)}</span>
+              </div>
+              <div className="flex justify-between text-sm border-t border-gray-200 pt-2">
+                <span className="text-gray-700 font-medium">Expected Kas Akhir</span>
+                <span className="font-bold text-orange-600">{formatIDR(expectedCash)}</span>
+              </div>
+            </div>
+
+            <div className="text-sm">
+              <p className="text-gray-500 font-medium mb-2">Rincian Pembayaran</p>
+              <div className="grid grid-cols-4 gap-2">
+                <div className="text-center">
+                  <p className="text-gray-500 text-xs">Cash</p>
+                  <p className="font-semibold">{formatIDR(sess.summary?.payments?.cash || 0)}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-gray-500 text-xs">Card</p>
+                  <p className="font-semibold">{formatIDR(sess.summary?.payments?.card || 0)}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-gray-500 text-xs">QRIS</p>
+                  <p className="font-semibold">{formatIDR(sess.summary?.payments?.qris || 0)}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-gray-500 text-xs">Transfer</p>
+                  <p className="font-semibold">{formatIDR(sess.summary?.payments?.transfer || 0)}</p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Kas Akhir Sebenarnya <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={endCash}
+                onChange={(e) => setEndCash(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Masukkan jumlah kas akhir"
+              />
+            </div>
+
+            {endCash && actualEndCash > 0 && (
+              <div className={`p-3 rounded-lg border ${
+                variance === 0 ? "bg-green-50 border-green-200" : 
+                variance > 0 ? "bg-blue-50 border-blue-200" : 
+                "bg-red-50 border-red-200"
+              }`}>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Selisih</span>
+                  <span className={`font-bold ${
+                    variance === 0 ? "text-green-600" : variance > 0 ? "text-blue-600" : "text-red-600"
+                  }`}>
+                    {variance === 0 ? "Sesuai" : formatIDR(variance)}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="px-6 py-4 border-t border-gray-200 flex gap-3">
+            <button
+              onClick={() => { setShowCloseModal(false); setEndCash(""); }}
+              className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 font-medium"
+            >
+              Batal
+            </button>
+            <button
+              onClick={handleCloseSession}
+              disabled={closing || !endCash}
+              className="flex-1 px-4 py-3 bg-orange-600 hover:bg-orange-700 disabled:bg-gray-300 text-white rounded-xl font-medium flex items-center justify-center gap-2"
+            >
+              {closing ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : "Tutup Sesi"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 }

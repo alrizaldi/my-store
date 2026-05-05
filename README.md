@@ -5,6 +5,7 @@ My Store is a modern full-stack retail management application built with Next.js
 ## Features
 
 ### Core Modules
+
 - **Authentication**: Login/logout and current user information management
 - **Dashboard**: Aggregated business metrics and analytics
 - **Product Management**: Full CRUD operations for products and categories
@@ -16,6 +17,7 @@ My Store is a modern full-stack retail management application built with Next.js
 - **Promotion Management**: Discount and promotion campaign configuration
 
 ### Technical Features
+
 - Next.js 16 with App Router (SSR/SSG/ISR mixed architecture)
 - TypeScript type safety
 - Prisma ORM with PostgreSQL database
