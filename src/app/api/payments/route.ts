@@ -1,56 +1,45 @@
 import { type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { verifyToken } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   try {
+    const token = request.headers.get("authorization")?.split(" ")[1];
+    if (!token) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const payload = await verifyToken(token);
+    if (!payload) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { searchParams } = request.nextUrl;
     const orderId = searchParams.get("orderId") ?? undefined;
-    const methodParam = searchParams.get("method") ?? undefined;
-    const statusParam = searchParams.get("status") ?? undefined;
     const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
     const limit = Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10));
     const skip = (page - 1) * limit;
 
-    const method = methodParam as
-      | "CASH"
-      | "CARD"
-      | "QRIS"
-      | "TRANSFER"
-      | "OTHER"
-      | undefined;
-    const status = statusParam as
-      | "PENDING"
-      | "COMPLETED"
-      | "FAILED"
-      | "REFUNDED"
-      | undefined;
-
-    const where: any = {
-      ...(orderId ? { orderId } : {}),
-      ...(method ? { method } : {}),
-      ...(status ? { status } : {}),
+    const where = {
+      ...(orderId && { orderId }),
     };
 
-    const [data, total] = await prisma.$transaction([
+    const [total, data] = await Promise.all([
+      prisma.payment.count({ where }),
       prisma.payment.findMany({
         where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: "desc" },
         include: {
           order: {
-            select: {
-              id: true,
-              orderNumber: true,
-              total: true,
-              cashier: {
-                select: { id: true, name: true },
-              },
+            include: {
+              cashier: { select: { id: true, name: true } },
+              session: { select: { id: true, startCash: true } },
             },
           },
         },
-        orderBy: { createdAt: "desc" },
-        skip,
-        take: limit,
       }),
-      prisma.payment.count({ where }),
     ]);
 
     return Response.json({ data, total, page, limit });
@@ -65,85 +54,80 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const token = request.headers.get("authorization")?.split(" ")[1];
+    if (!token) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const payload = await verifyToken(token);
+    if (!payload) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
-    const { orderId, method, amount, reference } = body as {
+    const { orderId, method, amount } = body as {
       orderId: string;
       method: "CASH" | "CARD" | "QRIS" | "TRANSFER" | "OTHER";
       amount: number;
-      reference?: string;
     };
 
-    if (!orderId || orderId.trim() === "") {
-      return Response.json({ error: "orderId is required" }, { status: 400 });
-    }
-    if (!method) {
-      return Response.json({ error: "method is required" }, { status: 400 });
-    }
-    if (
-      !Object.values(["CASH", "CARD", "QRIS", "TRANSFER", "OTHER"]).includes(
-        method,
-      )
-    ) {
-      return Response.json(
-        {
-          error: `method must be one of: ${["CASH", "CARD", "QRIS", "TRANSFER", "OTHER"].join(", ")}`,
-        },
-        { status: 400 },
-      );
-    }
-    if (amount === undefined || amount === null) {
-      return Response.json({ error: "amount is required" }, { status: 400 });
-    }
-    if (Number(amount) <= 0) {
-      return Response.json(
-        { error: "amount must be greater than 0" },
-        { status: 400 },
-      );
+    if (!orderId || !method || amount === undefined) {
+      return Response.json({ error: "orderId, method, and amount are required" }, { status: 400 });
     }
 
-    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    // Get the order to verify it belongs to the user's session
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        session: true
+      }
+    });
+
     if (!order) {
       return Response.json({ error: "Order not found" }, { status: 404 });
     }
 
-    if (order.status === "COMPLETED") {
-      return Response.json({ error: "Order already paid" }, { status: 400 });
+    // Check if the order belongs to a session that the user owns
+    if (order.sessionId && order.session && order.session.cashierId !== payload.userId) {
+      return Response.json(
+        { error: "You can only make payments for orders in your own session" },
+        { status: 403 }
+      );
     }
 
-    const paidAmount = Number(amount);
-    const change = Math.max(0, paidAmount - order.total);
+    // Check if the order belongs to the current user as cashier
+    if (order.cashierId !== payload.userId) {
+      return Response.json(
+        { error: "You can only make payments for orders you created" },
+        { status: 403 }
+      );
+    }
 
-    // @ts-ignore: Transaction client type cannot be imported in Prisma v7+
-    const payment = await prisma.$transaction(async (tx) => {
-      const newPayment = await tx.payment.create({
-        data: {
-          orderId,
-          method: method as any,
-          amount: paidAmount,
-          change,
-          reference: reference ?? null,
-          status: "COMPLETED" as const,
-        },
-        include: {
-          order: {
-            select: {
-              id: true,
-              orderNumber: true,
-              total: true,
-              cashier: {
-                select: { id: true, name: true },
-              },
-            },
+    // Verify the amount matches the order total if method is CASH
+    if (method === "CASH" && amount < order.total) {
+      return Response.json(
+        { error: "Amount paid is less than the order total" },
+        { status: 400 }
+      );
+    }
+
+    // Create the payment
+    const payment = await prisma.payment.create({
+      data: {
+        orderId,
+        method,
+        amount,
+        status: "COMPLETED", // In a real app, this would be more dynamic
+        reference: `PAY-${Date.now()}`, // Simple reference generation
+      },
+      include: {
+        order: {
+          include: {
+            cashier: { select: { id: true, name: true } },
+            session: { select: { id: true, startCash: true } },
           },
         },
-      });
-
-      await tx.order.update({
-        where: { id: orderId },
-        data: { status: "COMPLETED" as const },
-      });
-
-      return newPayment;
+      },
     });
 
     return Response.json(payment, { status: 201 });

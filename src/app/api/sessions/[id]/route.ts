@@ -1,5 +1,6 @@
 import { type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { verifyToken } from "@/lib/auth";
 
 type OrderStatus = "PENDING" | "COMPLETED" | "CANCELLED" | "REFUNDED";
 type PaymentStatus = "PENDING" | "COMPLETED" | "FAILED" | "REFUNDED";
@@ -104,119 +105,75 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
-    const body = await request.json();
-    const endCash = body.endCash as number | undefined;
-    const status = body.status as "OPEN" | "CLOSED" | undefined;
-
-    // Handle close session
-    if (status === "CLOSED") {
-      if (endCash === undefined || endCash === null) {
-        return Response.json(
-          { error: "endCash is required when closing a session" },
-          { status: 400 }
-        );
-      }
-
-      const session = await prisma.cashierSession.findUnique({
-        where: { id },
-        include: {
-          orders: {
-            where: { status: "COMPLETED" },
-            select: {
-              payments: {
-                select: {
-                  method: true,
-                  amount: true,
-                  status: true,
-                },
-              },
-            },
-          },
-        },
-      });
-
-      if (!session) {
-        return Response.json({ error: "Session not found" }, { status: 404 });
-      }
-
-      const allPayments = session.orders.flatMap((o) => o.payments);
-      const completedPayments = allPayments.filter((p) => p.status === "COMPLETED");
-
-      const totalCash = completedPayments
-        .filter((p) => p.method === "CASH")
-        .reduce((sum, p) => sum + p.amount, 0);
-      const totalCard = completedPayments
-        .filter((p) => p.method === "CARD")
-        .reduce((sum, p) => sum + p.amount, 0);
-      const totalQris = completedPayments
-        .filter((p) => p.method === "QRIS")
-        .reduce((sum, p) => sum + p.amount, 0);
-      const totalTransfer = completedPayments
-        .filter((p) => p.method === "TRANSFER")
-        .reduce((sum, p) => sum + p.amount, 0);
-
-      const expectedCash = session.startCash + totalCash;
-      const actualCash = endCash!;
-      const variance = actualCash - expectedCash;
-      const totalRevenue = completedPayments.reduce((sum, p) => sum + p.amount, 0);
-
-      const updatedSession = await prisma.cashierSession.update({
-        where: { id },
-        data: {
-          endCash,
-          status: "CLOSED",
-          closedAt: new Date(),
-        },
-        include: {
-          cashier: {
-            select: { id: true, name: true, email: true },
-          },
-        },
-      });
-
-      return Response.json({
-        ...updatedSession,
-        closingStatement: {
-          startCash: session.startCash,
-          endCash: actualCash,
-          expectedCash,
-          variance,
-          totalRevenue,
-          payments: {
-            cash: totalCash,
-            card: totalCard,
-            qris: totalQris,
-            transfer: totalTransfer,
-          },
-        },
-      });
+    const token = request.headers.get("authorization")?.split(" ")[1];
+    if (!token) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Handle other updates - can only be OPEN or undefined at this point
-    const updateData: { endCash?: number; status?: "OPEN" } = {};
-    if (endCash !== undefined) updateData.endCash = endCash;
-    if (status !== undefined) updateData.status = "OPEN";
+    const payload = await verifyToken(token);
+    if (!payload) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-    const session = await prisma.cashierSession.update({
+    const { id } = await params;
+
+    // Verify that the user trying to close the session is the one who opened it
+    const session = await prisma.cashierSession.findUnique({
       where: { id },
-      data: updateData,
-      include: {
-        cashier: {
-          select: { id: true, name: true, email: true },
-        },
+    });
+
+    if (!session) {
+      return Response.json({ error: "Session not found" }, { status: 404 });
+    }
+
+    if (session.cashierId !== userId) {
+      return Response.json(
+        { error: "You can only close sessions that you opened" },
+        { status: 403 }
+      );
+    }
+
+    const body = await request.json();
+    const { status, endCash } = body as {
+      status?: "OPEN" | "CLOSED";
+      endCash?: number;
+    };
+
+    if (status === "CLOSED" && (endCash === undefined || endCash === null)) {
+      return Response.json(
+        { error: "endCash is required when closing a session" },
+        { status: 400 }
+      );
+    }
+
+    const updatedSession = await prisma.cashierSession.update({
+      where: { id },
+      data: {
+        ...(status !== undefined && { status }),
+        ...(endCash !== undefined && { endCash }),
+        ...(status === "CLOSED" && { closedAt: new Date() }),
       },
     });
 
-    return Response.json(session);
-  } catch (error: unknown) {
+    return Response.json(updatedSession);
+  } catch (error) {
     console.error("[PATCH /api/sessions/[id]]", error);
-    if (typeof error === "object" && error !== null && "code" in error) {
-      const code = (error as { code: string }).code;
-      if (code === "P2025") {
-        return Response.json({ error: "Session not found" }, { status: 404 });
-      }
-    }
     return Response.json({ error: "Failed to update session" }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+
+    await prisma.cashierSession.delete({ where: { id } });
+
+    return Response.json({ success: true });
+  } catch (error) {
+    console.error("[DELETE /api/sessions/[id]]", error);
+    return Response.json({ error: "Failed to delete session" }, { status: 500 });
   }
 }

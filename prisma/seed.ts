@@ -74,6 +74,8 @@ async function main() {
         "cashier:use",
         "session:open",
         "session:close",
+        "attendance:read",
+        "attendance:write",
       ],
     },
   });

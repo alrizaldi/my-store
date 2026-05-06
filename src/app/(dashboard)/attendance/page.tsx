@@ -118,14 +118,50 @@ export default function AttendancePage() {
     notes: "",
   });
   const [saving, setSaving] = useState(false);
+  
+  // Get user role to customize behavior
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  // Fetch user data from the backend
+  useEffect(() => {
+    async function fetchUserData() {
+      try {
+        const response = await fetch('/api/auth/me');
+        if (response.ok) {
+          const userData = await response.json();
+          setUserRole(userData.role?.name || userData.role);
+          setUserId(userData.id);
+          
+          // If user is a cashier, default to their own attendance
+          if (userData.role?.name === 'Cashier' || userData.role === 'Cashier') {
+            setSelectedEmployee(userData.id);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch user data:', error);
+      }
+    }
+    
+    fetchUserData();
+  }, []);
+
+  // Determine if current user is a cashier
+  const isCashier = userRole === 'Cashier';
 
   // ---- Fetch employees once ------------------------------------------------
   useEffect(() => {
+    // Cashiers shouldn't see other employees
+    if (isCashier) {
+      setEmployees([]);
+      return;
+    }
+    
     fetch("/api/employees?limit=100")
       .then((r) => r.json())
       .then((res: { data: Employee[] }) => setEmployees(Array.isArray(res.data) ? res.data : []))
       .catch(() => setEmployees([]));
-  }, []);
+  }, [isCashier]);
 
   // ---- Fetch attendance when filters/page change --------------------------
   const fetchAttendance = useCallback(() => {
@@ -135,7 +171,13 @@ export default function AttendancePage() {
       limit: String(LIMIT),
       month: selectedMonth,
     });
-    if (selectedEmployee) params.set("userId", selectedEmployee);
+    
+    // Only pass userId if not a cashier or if specifically selected
+    if (selectedEmployee && !isCashier) {
+      params.set("userId", selectedEmployee);
+    } else if (isCashier && userId) {
+      params.set("userId", userId);
+    }
 
     fetch(`/api/attendance?${params}`)
       .then((r) => r.json())
@@ -148,7 +190,7 @@ export default function AttendancePage() {
         setTotal(0);
       })
       .finally(() => setLoading(false));
-  }, [page, selectedMonth, selectedEmployee]);
+  }, [page, selectedMonth, selectedEmployee, isCashier, userId]);
 
   useEffect(() => {
     fetchAttendance();
@@ -177,10 +219,10 @@ export default function AttendancePage() {
     const dateStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
 
     setForm({
-      userId: selectedEmployee || employees[0]?.id || "",
+      userId: isCashier ? userId || "" : selectedEmployee || employees[0]?.id || "",
       date: dateStr,
       status: "PRESENT",
-      checkIn: "",
+      checkIn: toDatetimeLocal(new Date().toISOString()),
       checkOut: "",
       notes: "",
     });
@@ -210,55 +252,58 @@ export default function AttendancePage() {
     setEditingRecord(null);
   }
 
-  // ---- Save ----------------------------------------------------------------
+  // ---- Save (create or edit) -----------------------------------------------
   async function handleSave() {
-    if (!form.userId || !form.date) {
-      setAlert({ message: "Employee and date are required.", type: "error" });
+    if (!form.date.trim() || !form.status) {
+      setAlert({ message: "Date and status are required.", type: "error" });
+      return;
+    }
+
+    // Cashiers can only edit their own records
+    if (isCashier && form.userId !== userId) {
+      setAlert({ message: "You can only manage your own attendance.", type: "error" });
       return;
     }
 
     setSaving(true);
     try {
-      const body: Record<string, unknown> = {
-        userId: form.userId,
-        date: form.date,
-        status: form.status,
-        notes: form.notes || undefined,
-      };
-      if (form.checkIn) body.checkIn = new Date(form.checkIn).toISOString();
-      if (form.checkOut) body.checkOut = new Date(form.checkOut).toISOString();
-
       let res: Response;
 
-      if (showModal === "edit" && editingRecord) {
-        // PATCH specific record
-        const patchBody: Record<string, unknown> = {
-          status: form.status,
-          notes: form.notes || undefined,
-        };
-        if (form.checkIn) patchBody.checkIn = new Date(form.checkIn).toISOString();
-        if (form.checkOut) patchBody.checkOut = new Date(form.checkOut).toISOString();
-
-        res = await fetch(`/api/attendance/${editingRecord.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(patchBody),
-        });
-      } else {
-        // POST upserts by userId+date
+      if (showModal === "create") {
         res = await fetch("/api/attendance", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
+          body: JSON.stringify({
+            userId: form.userId,
+            date: form.date,
+            status: form.status,
+            checkIn: form.checkIn || undefined,
+            checkOut: form.checkOut || undefined,
+            notes: form.notes || undefined,
+          }),
+        });
+      } else {
+        res = await fetch(`/api/attendance/${editingRecord!.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            status: form.status,
+            checkIn: form.checkIn || undefined,
+            checkOut: form.checkOut || undefined,
+            notes: form.notes || undefined,
+          }),
         });
       }
 
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error ?? "Failed to save record");
+        throw new Error(err.error ?? (showModal === "create" ? "Failed to create record" : "Failed to update record"));
       }
 
-      setAlert({ message: showModal === "create" ? "Attendance record saved." : "Record updated successfully.", type: "success" });
+      setAlert({ 
+        message: showModal === "create" ? "Attendance record created successfully." : "Attendance record updated successfully.", 
+        type: "success" 
+      });
       closeModal();
       fetchAttendance();
     } catch (e) {
@@ -268,10 +313,27 @@ export default function AttendancePage() {
     }
   }
 
-  // ---- Pagination ----------------------------------------------------------
-  const totalPages = Math.max(1, Math.ceil(total / LIMIT));
-  const start = (page - 1) * LIMIT + 1;
+  // ---- Delete --------------------------------------------------------------
+  async function handleDelete(record: AttendanceRecord) {
+    if (!window.confirm(`Delete attendance record for ${record.user.name} on ${new Date(record.date).toLocaleDateString("id-ID")}?`)) return;
+
+    try {
+      const res = await fetch(`/api/attendance/${record.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error ?? "Failed to delete record");
+      }
+      setAlert({ message: "Attendance record deleted.", type: "success" });
+      fetchAttendance();
+    } catch (e) {
+      setAlert({ message: e instanceof Error ? e.message : "An error occurred.", type: "error" });
+    }
+  }
+
+  // Calculate pagination values
+  const start = total === 0 ? 0 : (page - 1) * LIMIT + 1;
   const end = Math.min(page * LIMIT, total);
+  const totalPages = Math.ceil(total / LIMIT);
 
   // ---- Render --------------------------------------------------------------
   return (
@@ -399,9 +461,18 @@ export default function AttendancePage() {
                       <button
                         onClick={() => openEdit(record)}
                         className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                        disabled={isCashier && record.userId !== userId} // Cashier can only edit their own records
                       >
                         Edit
                       </button>
+                      {!isCashier && (
+                        <button
+                          onClick={() => handleDelete(record)}
+                          className="ml-3 text-xs text-red-600 hover:text-red-800 font-medium"
+                        >
+                          Delete
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );
@@ -449,21 +520,23 @@ export default function AttendancePage() {
             </div>
 
             <div className="px-6 py-4 space-y-4 overflow-y-auto flex-1">
-              {/* Employee */}
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Employee <span className="text-red-500">*</span></label>
-                <select
-                  value={form.userId}
-                  onChange={(e) => setForm((f) => ({ ...f, userId: e.target.value }))}
-                  disabled={showModal === "edit"}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
-                >
-                  <option value="">Select employee...</option>
-                  {employees.map((emp) => (
-                    <option key={emp.id} value={emp.id}>{emp.name}</option>
-                  ))}
-                </select>
-              </div>
+              {/* Employee - Hidden for cashiers */}
+          {!isCashier && (
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Employee <span className="text-red-500">*</span></label>
+              <select
+                value={form.userId}
+                onChange={(e) => setForm((f) => ({ ...f, userId: e.target.value }))}
+                disabled={showModal === "edit"}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
+              >
+                <option value="">Select employee...</option>
+                {employees.map((emp) => (
+                  <option key={emp.id} value={emp.id}>{emp.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
               {/* Date */}
               <div>

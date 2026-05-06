@@ -43,6 +43,8 @@ export default function CashierDashboard() {
   const [opening, setOpening] = useState(false);
   const [startCash, setStartCash] = useState("");
   const [alert, setAlert] = useState<Alert | null>(null);
+  const [hasAttendance, setHasAttendance] = useState<boolean | null>(null);
+  const [checkingAttendance, setCheckingAttendance] = useState(true);
 
   // State for closing session
   const [closing, setClosing] = useState(false);
@@ -53,6 +55,26 @@ export default function CashierDashboard() {
     setAlert({ message, type });
     setTimeout(() => setAlert(null), 4000);
   };
+
+  // Check if user has marked attendance for the day
+  const checkAttendance = useCallback(async () => {
+    setCheckingAttendance(true);
+    try {
+      const res = await fetch("/api/attendance/check");
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to check attendance");
+      }
+      
+      setHasAttendance(data.hasMarkedAttendance);
+    } catch (err) {
+      console.error("Attendance check failed:", err);
+      setHasAttendance(false); // Default to false if check fails
+    } finally {
+      setCheckingAttendance(false);
+    }
+  }, []);
 
   const fetchOpenSession = useCallback(async () => {
     setLoading(true);
@@ -77,20 +99,31 @@ export default function CashierDashboard() {
   // Initial load and refresh when returning from POS
   useEffect(() => {
     fetchOpenSession();
-  }, [fetchOpenSession]);
+    checkAttendance();
+  }, [fetchOpenSession, checkAttendance]);
 
   // Refresh when page becomes visible (user returns from POS)
   useEffect(() => {
     const handleVisibility = () => {
       if (!document.hidden) {
         fetchOpenSession();
+        checkAttendance();
       }
     };
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, [fetchOpenSession]);
+  }, [fetchOpenSession, checkAttendance]);
 
   const openSession = async () => {
+    // Check attendance again before opening session
+    await checkAttendance();
+    
+    if (hasAttendance === false) {
+      showAlert("Anda harus absen hadir terlebih dahulu sebelum membuka sesi kasir", "error");
+      router.push("/attendance"); // Redirect to attendance page
+      return;
+    }
+    
     const parsed = parseFloat(startCash);
     if (!startCash || isNaN(parsed) || parsed < 0) {
       showAlert("Masukkan jumlah kas awal yang valid", "error");
@@ -145,7 +178,7 @@ export default function CashierDashboard() {
     }
   };
 
-  if (loading) {
+  if (loading || checkingAttendance) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
         <div className="text-gray-400">Memuat...</div>
@@ -304,9 +337,19 @@ export default function CashierDashboard() {
             </div>
             <h2 className="font-semibold text-gray-900">Belum Ada Sesi Aktif</h2>
             <p className="text-sm text-gray-500 mt-1">
-              Buka sesi terlebih dahulu untuk mulai transaksi
+              {hasAttendance 
+                ? "Buka sesi terlebih dahulu untuk mulai transaksi" 
+                : "Anda harus absen hadir terlebih dahulu sebelum membuka sesi kasir"}
             </p>
           </div>
+
+          {!hasAttendance && (
+            <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <p className="text-sm text-yellow-700">
+                <strong>Catatan:</strong> Anda belum absen hari ini. Silakan absen terlebih dahulu sebelum membuka sesi kasir.
+              </p>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -319,15 +362,20 @@ export default function CashierDashboard() {
               onChange={(e) => setStartCash(e.target.value)}
               className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Masukkan jumlah kas awal"
+              disabled={!hasAttendance}
             />
           </div>
 
           <button
             onClick={openSession}
-            disabled={opening}
-            className="w-full mt-4 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+            disabled={opening || !hasAttendance}
+            className={`w-full mt-4 py-3 ${
+              hasAttendance 
+                ? "bg-green-600 hover:bg-green-700" 
+                : "bg-gray-300 cursor-not-allowed"
+            } text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2`}
           >
-{opening ? (
+            {opening ? (
               <>
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 Membuka Sesi...
@@ -351,6 +399,28 @@ export default function CashierDashboard() {
               </>
             )}
           </button>
+
+          {!hasAttendance && (
+            <button
+              onClick={() => router.push("/attendance")}
+              className="w-full mt-3 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+            >
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M6 16h.01"
+                />
+              </svg>
+              Absen Sekarang
+            </button>
+          )}
         </div>
       )}
     </div>
