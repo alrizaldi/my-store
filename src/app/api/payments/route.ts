@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { orderId, method, amount } = body as {
       orderId: string;
-      method: "CASH" | "CARD" | "QRIS" | "TRANSFER" | "OTHER";
+      method: "CASH" | "CARD" | "QRIS" | "TRANSFER";
       amount: number;
     };
 

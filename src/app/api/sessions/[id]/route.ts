@@ -126,7 +126,7 @@ export async function PATCH(
       return Response.json({ error: "Session not found" }, { status: 404 });
     }
 
-    if (session.cashierId !== userId) {
+    if (session.cashierId !== payload.userId) {
       return Response.json(
         { error: "You can only close sessions that you opened" },
         { status: 403 }
