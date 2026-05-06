@@ -199,6 +199,7 @@ export async function POST(request: NextRequest) {
       // Create the order
       const newOrder = await tx.order.create({
         data: {
+          orderNumber: `ORD-${Date.now()}`, // Generate unique order number
           cashierId: payload.userId,
           promoId: promo?.id,
           subtotal,
@@ -209,11 +210,13 @@ export async function POST(request: NextRequest) {
           items: {
             create: items.map((item) => {
               const product = products.find((p) => p.id === item.productId)!;
+              const subtotal = item.quantity * product.price;
               return {
                 productId: item.productId,
                 quantity: item.quantity,
                 unitPrice: product.price,
                 discount: 0, // Could be extended to support item-level discounts
+                subtotal,
               };
             }),
           },
