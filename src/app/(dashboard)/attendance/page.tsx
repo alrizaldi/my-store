@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 
-// ---- Types ------------------------------------------------------------------
+// ---- Types ---------------------------------------------------------------
 
 interface AttendanceUser {
   id: string;
@@ -54,7 +54,10 @@ interface FormState {
 
 // ---- Status config ----------------------------------------------------------
 
-const STATUS_CONFIG: Record<AttendanceStatus, { label: string; className: string }> = {
+const STATUS_CONFIG: Record<
+  AttendanceStatus,
+  { label: string; className: string }
+> = {
   PRESENT: { label: "Present", className: "bg-green-100 text-green-700" },
   ABSENT: { label: "Absent", className: "bg-red-100 text-red-700" },
   LATE: { label: "Late", className: "bg-yellow-100 text-yellow-700" },
@@ -62,18 +65,29 @@ const STATUS_CONFIG: Record<AttendanceStatus, { label: string; className: string
   HOLIDAY: { label: "Holiday", className: "bg-gray-100 text-gray-600" },
 };
 
-const ALL_STATUSES: AttendanceStatus[] = ["PRESENT", "ABSENT", "LATE", "LEAVE", "HOLIDAY"];
+const ALL_STATUSES: AttendanceStatus[] = [
+  "PRESENT",
+  "ABSENT",
+  "LATE",
+  "LEAVE",
+  "HOLIDAY",
+];
 
 // ---- Helpers ----------------------------------------------------------------
 
 function formatTime(dateStr: string | null): string {
   if (!dateStr) return "-";
-  return new Date(dateStr).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+  return new Date(dateStr).toLocaleTimeString("id-ID", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function calcDuration(checkIn: string | null, checkOut: string | null): string {
   if (!checkIn || !checkOut) return "-";
-  const mins = Math.floor((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 60000);
+  const mins = Math.floor(
+    (new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 60000,
+  );
   if (mins < 0) return "-";
   return `${Math.floor(mins / 60)}h ${mins % 60}m`;
 }
@@ -106,7 +120,9 @@ export default function AttendancePage() {
   const LIMIT = 30;
 
   const [showModal, setShowModal] = useState<ModalMode>(false);
-  const [editingRecord, setEditingRecord] = useState<AttendanceRecord | null>(null);
+  const [editingRecord, setEditingRecord] = useState<AttendanceRecord | null>(
+    null,
+  );
   const [alert, setAlert] = useState<Alert | null>(null);
 
   const [form, setForm] = useState<FormState>({
@@ -159,7 +175,9 @@ export default function AttendancePage() {
     
     fetch("/api/employees?limit=100")
       .then((r) => r.json())
-      .then((res: { data: Employee[] }) => setEmployees(Array.isArray(res.data) ? res.data : []))
+      .then((res: { data: Employee[] }) =>
+        setEmployees(Array.isArray(res.data) ? res.data : []),
+      )
       .catch(() => setEmployees([]));
   }, [isCashier]);
 
@@ -209,7 +227,7 @@ export default function AttendancePage() {
       acc[s] = attendance.filter((r) => r.status === s).length;
       return acc;
     },
-    {} as Record<AttendanceStatus, number>
+    {} as Record<AttendanceStatus, number>,
   );
 
   // ---- Modal helpers -------------------------------------------------------
@@ -269,7 +287,28 @@ export default function AttendancePage() {
     try {
       let res: Response;
 
+<<<<<<< HEAD
       if (showModal === "create") {
+=======
+      if (showModal === "edit" && editingRecord) {
+        // PATCH specific record
+        const patchBody: Record<string, unknown> = {
+          status: form.status,
+          notes: form.notes || undefined,
+        };
+        if (form.checkIn)
+          patchBody.checkIn = new Date(form.checkIn).toISOString();
+        if (form.checkOut)
+          patchBody.checkOut = new Date(form.checkOut).toISOString();
+
+        res = await fetch(`/api/attendance/${editingRecord.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(patchBody),
+        });
+      } else {
+        // POST upserts by userId+date
+>>>>>>> no-session
         res = await fetch("/api/attendance", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -300,14 +339,26 @@ export default function AttendancePage() {
         throw new Error(err.error ?? (showModal === "create" ? "Failed to create record" : "Failed to update record"));
       }
 
+<<<<<<< HEAD
       setAlert({ 
         message: showModal === "create" ? "Attendance record created successfully." : "Attendance record updated successfully.", 
         type: "success" 
+=======
+      setAlert({
+        message:
+          showModal === "create"
+            ? "Attendance record saved."
+            : "Record updated successfully.",
+        type: "success",
+>>>>>>> no-session
       });
       closeModal();
       fetchAttendance();
     } catch (e) {
-      setAlert({ message: e instanceof Error ? e.message : "An error occurred.", type: "error" });
+      setAlert({
+        message: e instanceof Error ? e.message : "An error occurred.",
+        type: "error",
+      });
     } finally {
       setSaving(false);
     }
@@ -342,16 +393,23 @@ export default function AttendancePage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Attendance</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Track and manage employee attendance</p>
+          <p className="text-sm text-gray-500 mt-0.5">
+            Track and manage employee attendance
+          </p>
         </div>
-        <button onClick={openCreate} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700">
+        <button
+          onClick={openCreate}
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700"
+        >
           + Add Record
         </button>
       </div>
 
       {/* Alert */}
       {alert && (
-        <div className={`px-4 py-3 rounded-lg text-sm font-medium ${alert.type === "success" ? "bg-green-50 text-green-800 border border-green-200" : "bg-red-50 text-red-800 border border-red-200"}`}>
+        <div
+          className={`px-4 py-3 rounded-lg text-sm font-medium ${alert.type === "success" ? "bg-green-50 text-green-800 border border-green-200" : "bg-red-50 text-red-800 border border-red-200"}`}
+        >
           {alert.message}
         </div>
       )}
@@ -361,9 +419,14 @@ export default function AttendancePage() {
         {ALL_STATUSES.map((status) => {
           const cfg = STATUS_CONFIG[status];
           return (
-            <div key={status} className={`rounded-xl border px-4 py-3 ${cfg.className} border-current/20`}>
+            <div
+              key={status}
+              className={`rounded-xl border px-4 py-3 ${cfg.className} border-current/20`}
+            >
               <p className="text-xl font-bold">{summary[status]}</p>
-              <p className="text-xs font-medium opacity-80 mt-0.5">{cfg.label}</p>
+              <p className="text-xs font-medium opacity-80 mt-0.5">
+                {cfg.label}
+              </p>
             </div>
           );
         })}
@@ -374,22 +437,34 @@ export default function AttendancePage() {
         <input
           type="month"
           value={selectedMonth}
-          onChange={(e) => { setSelectedMonth(e.target.value); setPage(1); }}
+          onChange={(e) => {
+            setSelectedMonth(e.target.value);
+            setPage(1);
+          }}
           className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         <select
           value={selectedEmployee}
-          onChange={(e) => { setSelectedEmployee(e.target.value); setPage(1); }}
+          onChange={(e) => {
+            setSelectedEmployee(e.target.value);
+            setPage(1);
+          }}
           className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="">All Employees</option>
           {employees.map((emp) => (
-            <option key={emp.id} value={emp.id}>{emp.name}</option>
+            <option key={emp.id} value={emp.id}>
+              {emp.name}
+            </option>
           ))}
         </select>
         {(selectedEmployee || selectedMonth !== currentMonth()) && (
           <button
-            onClick={() => { setSelectedEmployee(""); setSelectedMonth(currentMonth()); setPage(1); }}
+            onClick={() => {
+              setSelectedEmployee("");
+              setSelectedMonth(currentMonth());
+              setPage(1);
+            }}
             className="text-xs text-gray-500 hover:text-gray-700 underline"
           >
             Reset filters
@@ -414,7 +489,10 @@ export default function AttendancePage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-gray-400">
+                <td
+                  colSpan={7}
+                  className="px-4 py-10 text-center text-gray-400"
+                >
                   <div className="flex items-center justify-center gap-2">
                     <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                     Loading...
@@ -423,21 +501,30 @@ export default function AttendancePage() {
               </tr>
             ) : attendance.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-gray-400">
+                <td
+                  colSpan={7}
+                  className="px-4 py-10 text-center text-gray-400"
+                >
                   No attendance records for this period.
                 </td>
               </tr>
             ) : (
               attendance.map((record) => {
-                const cfg = STATUS_CONFIG[record.status] ?? STATUS_CONFIG.PRESENT;
+                const cfg =
+                  STATUS_CONFIG[record.status] ?? STATUS_CONFIG.PRESENT;
                 return (
-                  <tr key={record.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                  <tr
+                    key={record.id}
+                    className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                  >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
                           {record.user.name.charAt(0).toUpperCase()}
                         </div>
-                        <span className="font-medium text-gray-900">{record.user.name}</span>
+                        <span className="font-medium text-gray-900">
+                          {record.user.name}
+                        </span>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-gray-600">
@@ -450,7 +537,9 @@ export default function AttendancePage() {
                       {formatTime(record.checkOut)}
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${cfg.className}`}>
+                      <span
+                        className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${cfg.className}`}
+                      >
                         {cfg.label}
                       </span>
                     </td>
@@ -485,7 +574,9 @@ export default function AttendancePage() {
       {/* Pagination */}
       {total > 0 && (
         <div className="flex items-center justify-between text-sm text-gray-500">
-          <span>Showing {start}–{end} of {total} records</span>
+          <span>
+            Showing {start}–{end} of {total} records
+          </span>
           <div className="flex gap-2">
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
@@ -514,12 +605,20 @@ export default function AttendancePage() {
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
               <h2 className="text-base font-semibold text-gray-900">
-                {showModal === "create" ? "Add Attendance Record" : "Edit Attendance Record"}
+                {showModal === "create"
+                  ? "Add Attendance Record"
+                  : "Edit Attendance Record"}
               </h2>
-              <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+              <button
+                onClick={closeModal}
+                className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+              >
+                &times;
+              </button>
             </div>
 
             <div className="px-6 py-4 space-y-4 overflow-y-auto flex-1">
+<<<<<<< HEAD
               {/* Employee - Hidden for cashiers */}
           {!isCashier && (
             <div>
@@ -537,64 +636,114 @@ export default function AttendancePage() {
               </select>
             </div>
           )}
+=======
+              {/* Employee */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Employee <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={form.userId}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, userId: e.target.value }))
+                  }
+                  disabled={showModal === "edit"}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
+                >
+                  <option value="">Select employee...</option>
+                  {employees.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+>>>>>>> no-session
 
               {/* Date */}
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Date <span className="text-red-500">*</span></label>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Date <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="date"
                   value={form.date}
-                  onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, date: e.target.value }))
+                  }
                   disabled={showModal === "edit"}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
                 />
                 {showModal === "edit" && (
-                  <p className="text-xs text-gray-400 mt-1">Date cannot be changed. Add a new record to change the date.</p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Date cannot be changed. Add a new record to change the date.
+                  </p>
                 )}
               </div>
 
               {/* Status */}
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Status <span className="text-red-500">*</span></label>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Status <span className="text-red-500">*</span>
+                </label>
                 <select
                   value={form.status}
-                  onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as AttendanceStatus }))}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      status: e.target.value as AttendanceStatus,
+                    }))
+                  }
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   {ALL_STATUSES.map((s) => (
-                    <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>
+                    <option key={s} value={s}>
+                      {STATUS_CONFIG[s].label}
+                    </option>
                   ))}
                 </select>
               </div>
 
               {/* Check In */}
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Check In</label>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Check In
+                </label>
                 <input
                   type="datetime-local"
                   value={form.checkIn}
-                  onChange={(e) => setForm((f) => ({ ...f, checkIn: e.target.value }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, checkIn: e.target.value }))
+                  }
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
               {/* Check Out */}
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Check Out</label>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Check Out
+                </label>
                 <input
                   type="datetime-local"
                   value={form.checkOut}
-                  onChange={(e) => setForm((f) => ({ ...f, checkOut: e.target.value }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, checkOut: e.target.value }))
+                  }
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
               {/* Notes */}
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Notes</label>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Notes
+                </label>
                 <textarea
                   value={form.notes}
-                  onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, notes: e.target.value }))
+                  }
                   rows={3}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                   placeholder="Optional notes..."
@@ -603,7 +752,10 @@ export default function AttendancePage() {
             </div>
 
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100">
-              <button onClick={closeModal} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">
+              <button
+                onClick={closeModal}
+                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
+              >
                 Cancel
               </button>
               <button
@@ -611,7 +763,11 @@ export default function AttendancePage() {
                 disabled={saving}
                 className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {saving ? "Saving..." : showModal === "create" ? "Save Record" : "Save Changes"}
+                {saving
+                  ? "Saving..."
+                  : showModal === "create"
+                    ? "Save Record"
+                    : "Save Changes"}
               </button>
             </div>
           </div>
